@@ -47,13 +47,15 @@ def main() -> NoReturn:
         print_installation_help()
         sys.exit(1)
 
-    if not check_npx_installed():
+    npx_path = shutil.which("npx")
+    if not npx_path:
         print("ERROR: npx is not available. Please ensure Node.js is properly installed.", file=sys.stderr)
         sys.exit(1)
 
     # Build the command: npx promptfoo@latest <args>
     # Use @latest to always get the most recent version
-    cmd = ["npx", "--yes", "promptfoo@latest"] + sys.argv[1:]
+    # Use the full path to npx for Windows compatibility
+    cmd = [npx_path, "--yes", "promptfoo@latest"] + sys.argv[1:]
 
     try:
         # Execute the command and inherit stdio
