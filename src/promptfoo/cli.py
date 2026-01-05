@@ -57,13 +57,16 @@ def main() -> NoReturn:
 
     # Build the command: npx promptfoo@latest <args>
     # Use the full path to npx and keep shell=False for security and reliability
-    cmd = [npx_path, "--yes", "promptfoo@latest"] + sys.argv[1:]
+    # Use -y (short form) which is more widely supported than --yes
+    cmd = [npx_path, "-y", "promptfoo@latest"] + sys.argv[1:]
 
     try:
         # Execute the command and inherit stdio
+        # stdin=DEVNULL prevents npx from blocking on prompts like "Ok to proceed? (y)"
         result = subprocess.run(
             cmd,
             env=os.environ.copy(),
+            stdin=subprocess.DEVNULL,  # Prevent prompts from blocking
             check=False,  # Don't raise exception on non-zero exit
             shell=False,  # Keep shell=False for security - works on all platforms with full path
         )
