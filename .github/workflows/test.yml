@@ -86,10 +86,12 @@ jobs:
       - name: Install package
         run: uv sync
 
-      - name: Clear npm cache on Windows
+      - name: Set custom npm cache directory on Windows
         if: runner.os == 'Windows'
-        run: npm cache clean --force
-        continue-on-error: true
+        run: |
+          echo "NPM_CONFIG_CACHE=${{ runner.temp }}\npm-cache" >> $GITHUB_ENV
+          npm config set cache "${{ runner.temp }}\npm-cache" --global
+        shell: bash
 
       - name: Test CLI can be invoked
         uses: nick-fields/retry@v3
