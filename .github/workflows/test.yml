@@ -76,6 +76,11 @@ jobs:
         with:
           node-version: "24"
 
+      - name: Clear npm cache on Windows
+        if: runner.os == 'Windows'
+        run: npm cache clean --force
+        continue-on-error: true
+
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
