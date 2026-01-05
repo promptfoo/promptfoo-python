@@ -64,7 +64,7 @@ def main() -> NoReturn:
                 shell=False,  # Keep shell=False for security
             )
             sys.exit(result.returncode)
-        except (OSError, PermissionError) as e:
+        except (OSError, PermissionError):
             # Global executable exists but failed to run (resource issues, permissions, etc.)
             # Fall through to npx fallback for reliability
             # Common on CI where executable may not be ready immediately after install
