@@ -1,0 +1,96 @@
+name: release-please
+run-name: promptfoo-python release by @${{ github.actor }}
+
+concurrency:
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  build:
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    needs: release-please
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Pin Python version
+        run: uv python pin 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run tests
+        run: |
+          # Quick smoke test before publishing
+          uv run python -c "import promptfoo; print(promptfoo.__version__)"
+
+      - name: Build package
+        run: uv build
+
+      - name: Verify package version matches release
+        run: |
+          EXPECTED_VERSION="${{ needs.release-please.outputs.version }}"
+          if ls dist/*-${EXPECTED_VERSION}-*.whl 1> /dev/null 2>&1; then
+            echo "✓ Package version ${EXPECTED_VERSION} matches release"
+          else
+            echo "ERROR: Package version mismatch!"
+            echo "Expected version: ${EXPECTED_VERSION}"
+            echo "Built packages:"
+            ls -la dist/
+            exit 1
+          fi
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: dist
+          path: dist/
+
+  publish-pypi:
+    if: needs.release-please.outputs.release_created == 'true'
+    needs: [build, release-please]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/promptfoo/
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          print-hash: true

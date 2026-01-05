@@ -1,0 +1,82 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "promptfoo"
+version = "0.2.0"
+description = "Python wrapper for the promptfoo CLI - LLM testing, red teaming, and security evaluation"
+authors = [
+    { name = "Ian Webster", email = "ian@promptfoo.dev" },
+]
+license = { text = "MIT" }
+readme = "README.md"
+keywords = ["llm", "testing", "security", "red-team", "ai", "evaluation", "promptfoo"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Security",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.4.0",
+    "mypy>=1.16.0",
+    "ruff>=0.12.0",
+]
+
+[project.scripts]
+promptfoo = "promptfoo.cli:main"
+
+[project.urls]
+Repository = "https://github.com/promptfoo/promptfoo-python"
+Homepage = "https://www.promptfoo.dev"
+Documentation = "https://www.promptfoo.dev/docs"
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.lint]
+extend-select = [
+    "I",    # isort
+    "W",    # pycodestyle warnings
+    "E",    # pycodestyle errors
+    "Q",    # flake8-quotes
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+]
+
+ignore = [
+    "COM812",  # Trailing comma (conflicts with formatter)
+]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unreachable = true
+no_implicit_optional = true
+strict_equality = true
+show_error_codes = true
+pretty = true
+check_untyped_defs = true
+disallow_incomplete_defs = true

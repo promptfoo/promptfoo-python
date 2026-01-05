@@ -1,0 +1,146 @@
+name: Python CI
+
+on:
+  pull_request:
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    name: Lint and Format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Pin Python version
+        run: uv python pin 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Lint with Ruff
+        run: uv run ruff check src/
+
+      - name: Check formatting
+        run: uv run ruff format --check src/
+
+  type-check:
+    name: Type Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Pin Python version
+        run: uv python pin 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Type check with mypy
+        run: uv run mypy src/promptfoo/
+
+  test:
+    name: Test Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Pin Python version
+        run: uv python pin ${{ matrix.python-version }}
+
+      - name: Install package
+        run: uv pip install -e .
+
+      - name: Test CLI can be invoked
+        run: uv run promptfoo --version
+
+      - name: Test Node.js detection
+        run: uv run python -c "from promptfoo.cli import check_node_installed, check_npx_installed; assert check_node_installed(); assert check_npx_installed()"
+
+  build:
+    name: Build Package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Pin Python version
+        run: uv python pin 3.12
+
+      - name: Build package
+        run: uv build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: dist
+          path: dist/
+
+  ci-success:
+    name: CI Success
+    needs: [lint, type-check, test, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if all jobs succeeded
+        run: |
+          LINT_RESULT="${{ needs.lint.result }}"
+          TYPE_CHECK_RESULT="${{ needs.type-check.result }}"
+          TEST_RESULT="${{ needs.test.result }}"
+          BUILD_RESULT="${{ needs.build.result }}"
+
+          echo "Job results:"
+          echo "  lint: $LINT_RESULT"
+          echo "  type-check: $TYPE_CHECK_RESULT"
+          echo "  test: $TEST_RESULT"
+          echo "  build: $BUILD_RESULT"
+
+          if [[ "$LINT_RESULT" == "failure" || "$LINT_RESULT" == "cancelled" ||
+                "$TYPE_CHECK_RESULT" == "failure" || "$TYPE_CHECK_RESULT" == "cancelled" ||
+                "$TEST_RESULT" == "failure" || "$TEST_RESULT" == "cancelled" ||
+                "$BUILD_RESULT" == "failure" || "$BUILD_RESULT" == "cancelled" ]]; then
+            echo "Some CI checks failed!"
+            exit 1
+          else
+            echo "All CI checks passed!"
+            exit 0
+          fi
