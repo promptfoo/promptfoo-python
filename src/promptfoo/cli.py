@@ -39,7 +39,7 @@ def main() -> NoReturn:
     """
     Main entry point for the promptfoo CLI wrapper.
 
-    Tries to use globally installed promptfoo first, falls back to npx.
+    Tries to use globally installed promptfoo first, falls back to npx if needed.
     Exits with the same exit code as the underlying promptfoo command.
     """
     # Check for Node.js installation
@@ -47,37 +47,52 @@ def main() -> NoReturn:
         print_installation_help()
         sys.exit(1)
 
-    # Try to find a globally installed promptfoo first (fastest, most reliable)
+    # Try to find a globally installed promptfoo first (fastest when it works)
     # This avoids npm cache issues and download delays with npx
     promptfoo_path = shutil.which("promptfoo")
+    used_global = False
 
     if promptfoo_path:
-        # Use the globally installed version (preferred)
-        cmd = [promptfoo_path] + sys.argv[1:]
-    else:
-        # Fall back to npx if no global installation
-        # This is crucial for Windows where npx is actually npx.cmd
-        # Using the full path works cross-platform with shell=False
-        npx_path = shutil.which("npx")
-        if not npx_path:
-            print("ERROR: Neither promptfoo nor npx is available.", file=sys.stderr)
-            print("Please install promptfoo: npm install -g promptfoo", file=sys.stderr)
-            print("Or ensure Node.js is properly installed.", file=sys.stderr)
-            sys.exit(1)
+        try:
+            # Try the globally installed version first (preferred for speed)
+            cmd = [promptfoo_path] + sys.argv[1:]
+            result = subprocess.run(
+                cmd,
+                env=os.environ.copy(),
+                stdin=subprocess.DEVNULL,  # Prevent prompts from blocking
+                check=False,  # Don't raise exception on non-zero exit
+                shell=False,  # Keep shell=False for security
+            )
+            sys.exit(result.returncode)
+        except (OSError, PermissionError) as e:
+            # Global executable exists but failed to run (resource issues, permissions, etc.)
+            # Fall through to npx fallback for reliability
+            # Common on CI where executable may not be ready immediately after install
+            used_global = True
 
-        # Build the npx fallback command
-        # Use -y (short form) which is more widely supported than --yes
-        cmd = [npx_path, "-y", "promptfoo@latest"] + sys.argv[1:]
+    # Fall back to npx if:
+    # 1. No global installation found, OR
+    # 2. Global installation failed to execute (OSError, PermissionError, etc.)
+    npx_path = shutil.which("npx")
+    if not npx_path:
+        if used_global:
+            print("ERROR: Global promptfoo found but failed to execute, and npx is not available.", file=sys.stderr)
+        else:
+            print("ERROR: Neither promptfoo nor npx is available.", file=sys.stderr)
+        print("Please install promptfoo: npm install -g promptfoo", file=sys.stderr)
+        print("Or ensure Node.js is properly installed.", file=sys.stderr)
+        sys.exit(1)
 
     try:
-        # Execute the command and inherit stdio
-        # stdin=DEVNULL prevents npx from blocking on prompts like "Ok to proceed? (y)"
+        # Build and execute the npx fallback command
+        # Use -y (short form) which is more widely supported than --yes
+        cmd = [npx_path, "-y", "promptfoo@latest"] + sys.argv[1:]
         result = subprocess.run(
             cmd,
             env=os.environ.copy(),
             stdin=subprocess.DEVNULL,  # Prevent prompts from blocking
             check=False,  # Don't raise exception on non-zero exit
-            shell=False,  # Keep shell=False for security - works on all platforms with full path
+            shell=False,  # Keep shell=False for security
         )
         sys.exit(result.returncode)
     except KeyboardInterrupt:
@@ -85,7 +100,7 @@ def main() -> NoReturn:
         print("\nInterrupted by user", file=sys.stderr)
         sys.exit(130)
     except Exception as e:
-        print(f"ERROR: Failed to execute promptfoo: {e}", file=sys.stderr)
+        print(f"ERROR: Failed to execute promptfoo via npx: {e}", file=sys.stderr)
         sys.exit(1)
 
 
