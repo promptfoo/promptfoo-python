@@ -5,8 +5,8 @@ This module provides a thin wrapper around the promptfoo Node.js CLI tool.
 It executes the npx promptfoo command and passes through all arguments.
 """
 
+import os
 import shutil
-import subprocess
 import sys
 from typing import NoReturn
 
@@ -34,75 +34,41 @@ def print_installation_help() -> None:
     print("  https://github.com/nvm-sh/nvm", file=sys.stderr)
 
 
-def run_command(cmd: list[str]) -> subprocess.CompletedProcess:
-    """
-    Run a command with minimal configuration.
-
-    Uses the simplest possible subprocess.run configuration:
-    - Inherits environment naturally (no copying)
-    - Inherits stdio (npx -y flag handles prompts)
-    - shell=False for security
-    - check=False to handle exit codes manually
-    """
-    return subprocess.run(
-        cmd,
-        check=False,  # Don't raise exception on non-zero exit
-        shell=False,  # Keep shell=False for security
-    )
-
-
 def main() -> NoReturn:
     """
     Main entry point for the promptfoo CLI wrapper.
 
-    Tries to use globally installed promptfoo first, falls back to npx if needed.
-    Exits with the same exit code as the underlying promptfoo command.
+    Uses os.execvp() to replace the current process with promptfoo.
+    This is the standard Unix way to implement CLI wrappers - no subprocess overhead.
     """
     # Check for Node.js installation
     if not check_node_installed():
         print_installation_help()
         sys.exit(1)
 
-    # Try to find a globally installed promptfoo first (fastest when it works)
+    # Try to find a globally installed promptfoo first (fastest, most reliable)
     # This avoids npm cache issues and download delays with npx
-    promptfoo_path = shutil.which("promptfoo")
-    used_global = False
-
-    if promptfoo_path:
+    if shutil.which("promptfoo"):
+        # Use the globally installed version
+        # os.execvp replaces current process - never returns on success
         try:
-            # Try the globally installed version first (preferred for speed)
-            cmd = [promptfoo_path] + sys.argv[1:]
-            result = run_command(cmd)
-            sys.exit(result.returncode)
-        except (OSError, PermissionError):
-            # Global executable exists but failed to run (permissions, etc.)
-            # Fall through to npx fallback for reliability
-            used_global = True
+            os.execvp("promptfoo", ["promptfoo"] + sys.argv[1:])
+        except OSError as e:
+            # If exec fails, fall through to npx
+            pass
 
-    # Fall back to npx if:
-    # 1. No global installation found, OR
-    # 2. Global installation failed to execute (OSError, PermissionError, etc.)
-    npx_path = shutil.which("npx")
-    if not npx_path:
-        if used_global:
-            print("ERROR: Global promptfoo found but failed to execute, and npx is not available.", file=sys.stderr)
-        else:
-            print("ERROR: Neither promptfoo nor npx is available.", file=sys.stderr)
+    # Fall back to npx if no global installation or if global exec failed
+    if not shutil.which("npx"):
+        print("ERROR: Neither promptfoo nor npx is available.", file=sys.stderr)
         print("Please install promptfoo: npm install -g promptfoo", file=sys.stderr)
         print("Or ensure Node.js is properly installed.", file=sys.stderr)
         sys.exit(1)
 
+    # Use npx to run promptfoo
+    # os.execvp replaces current process - never returns on success
     try:
-        # Build and execute the npx fallback command
-        # Use -y flag to auto-accept prompts (no need for stdin modifications)
-        cmd = [npx_path, "-y", "promptfoo@latest"] + sys.argv[1:]
-        result = run_command(cmd)
-        sys.exit(result.returncode)
-    except KeyboardInterrupt:
-        # Handle Ctrl+C gracefully
-        print("\nInterrupted by user", file=sys.stderr)
-        sys.exit(130)
-    except Exception as e:
+        os.execvp("npx", ["npx", "-y", "promptfoo@latest"] + sys.argv[1:])
+    except OSError as e:
         print(f"ERROR: Failed to execute promptfoo via npx: {e}", file=sys.stderr)
         sys.exit(1)
 
