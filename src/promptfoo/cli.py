@@ -40,7 +40,7 @@ def main() -> NoReturn:
     """
     Main entry point for the promptfoo CLI wrapper.
 
-    Executes `npx promptfoo@latest <args>` and passes through all arguments.
+    Tries to use globally installed promptfoo first, falls back to npx.
     Exits with the same exit code as the underlying promptfoo command.
     """
     # Check for Node.js installation
@@ -48,29 +48,47 @@ def main() -> NoReturn:
         print_installation_help()
         sys.exit(1)
 
-    npx_path = shutil.which("npx")
-    if not npx_path:
-        print("ERROR: npx is not available. Please ensure Node.js is properly installed.", file=sys.stderr)
-        sys.exit(1)
-
-    # Build the command: npx promptfoo@latest <args>
-    # Use @latest to always get the most recent version
     is_windows = platform.system() == "Windows"
 
-    # On Windows, we need special handling for .cmd files
-    cmd: Union[str, list[str]]
-    if is_windows:
-        # On Windows, build command as string for shell=True
-        # This properly handles npx.cmd batch file execution
-        import shlex
+    # Try to find a globally installed promptfoo first
+    promptfoo_path = shutil.which("promptfoo")
 
-        args = ["npx", "--yes", "promptfoo@latest"] + sys.argv[1:]
-        cmd = " ".join(shlex.quote(arg) for arg in args)
-        use_shell = True
+    # Build the command
+    cmd: Union[str, list[str]]
+    use_shell: bool
+
+    if promptfoo_path:
+        # Use the globally installed promptfoo
+        if is_windows:
+            # On Windows, build command as string for shell=True to handle .cmd files
+            import shlex
+
+            args = ["promptfoo"] + sys.argv[1:]
+            cmd = " ".join(shlex.quote(arg) for arg in args)
+            use_shell = True
+        else:
+            # On Unix, use list format with shell=False (more secure)
+            cmd = [promptfoo_path] + sys.argv[1:]
+            use_shell = False
     else:
-        # On Unix, use list format with shell=False (more secure)
-        cmd = [npx_path, "--yes", "promptfoo@latest"] + sys.argv[1:]
-        use_shell = False
+        # Fall back to npx promptfoo@latest
+        npx_path = shutil.which("npx")
+        if not npx_path:
+            print("ERROR: promptfoo is not installed and npx is not available.", file=sys.stderr)
+            print("Please install promptfoo globally: npm install -g promptfoo", file=sys.stderr)
+            sys.exit(1)
+
+        if is_windows:
+            # On Windows, build command as string for shell=True to handle npx.cmd
+            import shlex
+
+            args = ["npx", "--yes", "promptfoo@latest"] + sys.argv[1:]
+            cmd = " ".join(shlex.quote(arg) for arg in args)
+            use_shell = True
+        else:
+            # On Unix, use list format with shell=False (more secure)
+            cmd = [npx_path, "--yes", "promptfoo@latest"] + sys.argv[1:]
+            use_shell = False
 
     try:
         # Execute the command and pass through stdio
