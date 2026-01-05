@@ -1,0 +1,14 @@
+# Code owners for promptfoo-python
+# These owners will be automatically requested for review when someone opens a pull request
+
+# Global owners
+* @promptfoo/engineering
+
+# Python source code
+/src/ @promptfoo/engineering
+
+# CI/CD workflows
+/.github/ @promptfoo/engineering
+
+# Package configuration
+/pyproject.toml @promptfoo/engineering
