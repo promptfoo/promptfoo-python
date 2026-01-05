@@ -5,6 +5,7 @@ This module provides a thin wrapper around the promptfoo Node.js CLI tool.
 It executes the npx promptfoo command and passes through all arguments.
 """
 
+import contextlib
 import os
 import shutil
 import sys
@@ -51,11 +52,9 @@ def main() -> NoReturn:
     if shutil.which("promptfoo"):
         # Use the globally installed version
         # os.execvp replaces current process - never returns on success
-        try:
+        # If exec fails, fall through to npx
+        with contextlib.suppress(OSError):
             os.execvp("promptfoo", ["promptfoo"] + sys.argv[1:])
-        except OSError as e:
-            # If exec fails, fall through to npx
-            pass
 
     # Fall back to npx if no global installation or if global exec failed
     if not shutil.which("npx"):
