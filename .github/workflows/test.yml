@@ -118,6 +118,12 @@ jobs:
         with:
           node-version: "24"
 
+      - name: Configure npm cache on Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          "NPM_CONFIG_CACHE=$env:RUNNER_TEMP\\npm-cache" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          npm cache clean --force
+
       # Intentionally skip installing promptfoo globally
       # This tests the npx fallback path
 
