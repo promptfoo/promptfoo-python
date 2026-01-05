@@ -10,7 +10,7 @@ import platform
 import shutil
 import subprocess
 import sys
-from typing import NoReturn, Union
+from typing import NoReturn
 
 
 def check_node_installed() -> bool:
@@ -53,23 +53,11 @@ def main() -> NoReturn:
     # Try to find a globally installed promptfoo first
     promptfoo_path = shutil.which("promptfoo")
 
-    # Build the command
-    cmd: Union[str, list[str]]
-    use_shell: bool
-
+    # Build the command list (always use shell=False for security)
+    # On Windows, we use cmd.exe to execute .cmd files properly
     if promptfoo_path:
         # Use the globally installed promptfoo
-        if is_windows:
-            # On Windows, build command as string for shell=True to handle .cmd files
-            import shlex
-
-            args = ["promptfoo"] + sys.argv[1:]
-            cmd = " ".join(shlex.quote(arg) for arg in args)
-            use_shell = True
-        else:
-            # On Unix, use list format with shell=False (more secure)
-            cmd = [promptfoo_path] + sys.argv[1:]
-            use_shell = False
+        cmd = ["cmd", "/c", promptfoo_path] + sys.argv[1:] if is_windows else [promptfoo_path] + sys.argv[1:]
     else:
         # Fall back to npx promptfoo@latest
         npx_path = shutil.which("npx")
@@ -78,25 +66,20 @@ def main() -> NoReturn:
             print("Please install promptfoo globally: npm install -g promptfoo", file=sys.stderr)
             sys.exit(1)
 
-        if is_windows:
-            # On Windows, build command as string for shell=True to handle npx.cmd
-            import shlex
-
-            args = ["npx", "--yes", "promptfoo@latest"] + sys.argv[1:]
-            cmd = " ".join(shlex.quote(arg) for arg in args)
-            use_shell = True
-        else:
-            # On Unix, use list format with shell=False (more secure)
-            cmd = [npx_path, "--yes", "promptfoo@latest"] + sys.argv[1:]
-            use_shell = False
+        cmd = (
+            ["cmd", "/c", npx_path, "--yes", "promptfoo@latest"] + sys.argv[1:]
+            if is_windows
+            else [npx_path, "--yes", "promptfoo@latest"] + sys.argv[1:]
+        )
 
     try:
-        # Execute the command and pass through stdio
+        # Execute the command with shell=False (more secure)
+        # Pass through stdio so the user interacts directly with promptfoo
         result = subprocess.run(
             cmd,
             env=os.environ.copy(),
             check=False,  # Don't raise exception on non-zero exit
-            shell=use_shell,
+            shell=False,  # Always False - more secure
         )
         sys.exit(result.returncode)
     except KeyboardInterrupt:
