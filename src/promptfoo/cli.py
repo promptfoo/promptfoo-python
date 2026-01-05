@@ -39,7 +39,7 @@ def main() -> NoReturn:
     """
     Main entry point for the promptfoo CLI wrapper.
 
-    Executes `npx promptfoo@latest <args>` and passes through all arguments.
+    Tries to use globally installed promptfoo first, falls back to npx.
     Exits with the same exit code as the underlying promptfoo command.
     """
     # Check for Node.js installation
@@ -47,18 +47,27 @@ def main() -> NoReturn:
         print_installation_help()
         sys.exit(1)
 
-    # Get the full path to npx
-    # This is crucial for Windows where npx is actually npx.cmd
-    # Using the full path works cross-platform with shell=False
-    npx_path = shutil.which("npx")
-    if not npx_path:
-        print("ERROR: npx is not available. Please ensure Node.js is properly installed.", file=sys.stderr)
-        sys.exit(1)
+    # Try to find a globally installed promptfoo first (fastest, most reliable)
+    # This avoids npm cache issues and download delays with npx
+    promptfoo_path = shutil.which("promptfoo")
 
-    # Build the command: npx promptfoo@latest <args>
-    # Use the full path to npx and keep shell=False for security and reliability
-    # Use -y (short form) which is more widely supported than --yes
-    cmd = [npx_path, "-y", "promptfoo@latest"] + sys.argv[1:]
+    if promptfoo_path:
+        # Use the globally installed version (preferred)
+        cmd = [promptfoo_path] + sys.argv[1:]
+    else:
+        # Fall back to npx if no global installation
+        # This is crucial for Windows where npx is actually npx.cmd
+        # Using the full path works cross-platform with shell=False
+        npx_path = shutil.which("npx")
+        if not npx_path:
+            print("ERROR: Neither promptfoo nor npx is available.", file=sys.stderr)
+            print("Please install promptfoo: npm install -g promptfoo", file=sys.stderr)
+            print("Or ensure Node.js is properly installed.", file=sys.stderr)
+            sys.exit(1)
+
+        # Build the npx fallback command
+        # Use -y (short form) which is more widely supported than --yes
+        cmd = [npx_path, "-y", "promptfoo@latest"] + sys.argv[1:]
 
     try:
         # Execute the command and inherit stdio

@@ -76,10 +76,10 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Clear npm cache on Windows
-        if: runner.os == 'Windows'
-        run: npm cache clean --force
-        continue-on-error: true
+      - name: Install promptfoo globally
+        run: npm install -g promptfoo@latest
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
 
       - uses: astral-sh/setup-uv@v7
         with:
