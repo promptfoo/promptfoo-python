@@ -58,8 +58,9 @@ def main() -> NoReturn:
     # Use the full path to npx for Windows compatibility
     cmd = [npx_path, "--yes", "promptfoo@latest"] + sys.argv[1:]
 
-    # On Windows, use shell=True to properly handle .cmd files
-    is_windows = platform.system() == "Windows"
+    # On Windows Python 3.9, we need shell=True for proper .cmd execution
+    # On other platforms/versions, use shell=False to avoid npm cache issues
+    is_windows_py39 = platform.system() == "Windows" and sys.version_info[:2] == (3, 9)
 
     try:
         # Execute the command and pass through stdio
@@ -67,7 +68,7 @@ def main() -> NoReturn:
             cmd,
             env=os.environ.copy(),
             check=False,  # Don't raise exception on non-zero exit
-            shell=is_windows,  # Use shell on Windows for .cmd compatibility
+            shell=is_windows_py39,  # Only use shell on Windows Python 3.9
         )
         sys.exit(result.returncode)
     except KeyboardInterrupt:
