@@ -74,10 +74,13 @@ def main() -> NoReturn:
 
     try:
         # Execute the command with shell=False (more secure)
-        # Pass through stdio so the user interacts directly with promptfoo
+        # Explicitly pass stdin, stdout, stderr to avoid resource blocking issues
         result = subprocess.run(
             cmd,
             env=os.environ.copy(),
+            stdin=sys.stdin,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
             check=False,  # Don't raise exception on non-zero exit
             shell=False,  # Always False - more secure
         )
