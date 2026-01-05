@@ -97,6 +97,41 @@ jobs:
       - name: Test Node.js detection
         run: uv run python -c "from promptfoo.cli import check_node_installed, check_npx_installed; assert check_node_installed(); assert check_npx_installed()"
 
+  test-npx-fallback:
+    name: Test npx fallback (Python ${{ matrix.python-version }} on ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        # Test a subset of configurations to verify npx fallback works
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      # Intentionally skip installing promptfoo globally
+      # This tests the npx fallback path
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Pin Python version
+        run: uv python pin ${{ matrix.python-version }}
+
+      - name: Install package
+        run: uv sync
+
+      - name: Test CLI fallback to npx (no global install)
+        run: uv run promptfoo --version
+
+      - name: Test Node.js detection
+        run: uv run python -c "from promptfoo.cli import check_node_installed, check_npx_installed; assert check_node_installed(); assert check_npx_installed()"
+
   build:
     name: Build Package
     runs-on: ubuntu-latest
@@ -122,7 +157,7 @@ jobs:
 
   ci-success:
     name: CI Success
-    needs: [lint, type-check, test, build]
+    needs: [lint, type-check, test, test-npx-fallback, build]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -131,17 +166,20 @@ jobs:
           LINT_RESULT="${{ needs.lint.result }}"
           TYPE_CHECK_RESULT="${{ needs.type-check.result }}"
           TEST_RESULT="${{ needs.test.result }}"
+          TEST_NPX_FALLBACK_RESULT="${{ needs.test-npx-fallback.result }}"
           BUILD_RESULT="${{ needs.build.result }}"
 
           echo "Job results:"
           echo "  lint: $LINT_RESULT"
           echo "  type-check: $TYPE_CHECK_RESULT"
           echo "  test: $TEST_RESULT"
+          echo "  test-npx-fallback: $TEST_NPX_FALLBACK_RESULT"
           echo "  build: $BUILD_RESULT"
 
           if [[ "$LINT_RESULT" == "failure" || "$LINT_RESULT" == "cancelled" ||
                 "$TYPE_CHECK_RESULT" == "failure" || "$TYPE_CHECK_RESULT" == "cancelled" ||
                 "$TEST_RESULT" == "failure" || "$TEST_RESULT" == "cancelled" ||
+                "$TEST_NPX_FALLBACK_RESULT" == "failure" || "$TEST_NPX_FALLBACK_RESULT" == "cancelled" ||
                 "$BUILD_RESULT" == "failure" || "$BUILD_RESULT" == "cancelled" ]]; then
             echo "Some CI checks failed!"
             exit 1
