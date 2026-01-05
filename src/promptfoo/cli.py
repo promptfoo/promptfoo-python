@@ -6,11 +6,10 @@ It executes the npx promptfoo command and passes through all arguments.
 """
 
 import os
-import platform
 import shutil
 import subprocess
 import sys
-from typing import NoReturn, Union
+from typing import NoReturn
 
 
 def check_node_installed() -> bool:
@@ -40,7 +39,7 @@ def main() -> NoReturn:
     """
     Main entry point for the promptfoo CLI wrapper.
 
-    Tries to use globally installed promptfoo first, falls back to npx.
+    Executes `npx promptfoo@latest <args>` and passes through all arguments.
     Exits with the same exit code as the underlying promptfoo command.
     """
     # Check for Node.js installation
@@ -48,64 +47,31 @@ def main() -> NoReturn:
         print_installation_help()
         sys.exit(1)
 
-    is_windows = platform.system() == "Windows"
+    # Get the full path to npx
+    # This is crucial for Windows where npx is actually npx.cmd
+    # Using the full path works cross-platform with shell=False
+    npx_path = shutil.which("npx")
+    if not npx_path:
+        print("ERROR: npx is not available. Please ensure Node.js is properly installed.", file=sys.stderr)
+        sys.exit(1)
 
-    # Try to find a globally installed promptfoo first
-    promptfoo_path = shutil.which("promptfoo")
-
-    # Build the command
-    # On Windows: use shell=True for .cmd file compatibility
-    # On Unix: use shell=False for security
-    cmd: Union[str, list[str]]
-    use_shell: bool
-
-    if is_windows:
-        # Windows requires shell=True or cmd.exe to run .cmd files
-        # Use subprocess list form which is safer than string form
-        import shlex
-
-        if promptfoo_path:
-            args = ["promptfoo"] + sys.argv[1:]
-        else:
-            # Fall back to npx
-            if not shutil.which("npx"):
-                print("ERROR: promptfoo is not installed and npx is not available.", file=sys.stderr)
-                print("Please install promptfoo globally: npm install -g promptfoo", file=sys.stderr)
-                sys.exit(1)
-            args = ["npx", "--yes", "promptfoo@latest"] + sys.argv[1:]
-
-        # On Windows, use shell=True with properly quoted arguments
-        cmd = " ".join(shlex.quote(arg) for arg in args)
-        use_shell = True
-    else:
-        # Unix: use shell=False for security
-        if promptfoo_path:
-            cmd = [promptfoo_path] + sys.argv[1:]
-        else:
-            npx_path = shutil.which("npx")
-            if not npx_path:
-                print("ERROR: promptfoo is not installed and npx is not available.", file=sys.stderr)
-                print("Please install promptfoo globally: npm install -g promptfoo", file=sys.stderr)
-                sys.exit(1)
-            cmd = [npx_path, "--yes", "promptfoo@latest"] + sys.argv[1:]
-        use_shell = False
+    # Build the command: npx promptfoo@latest <args>
+    # Use the full path to npx and keep shell=False for security and reliability
+    cmd = [npx_path, "--yes", "promptfoo@latest"] + sys.argv[1:]
 
     try:
-        # Execute the command
+        # Execute the command and inherit stdio
         result = subprocess.run(
             cmd,
             env=os.environ.copy(),
             check=False,  # Don't raise exception on non-zero exit
-            shell=use_shell,
+            shell=False,  # Keep shell=False for security - works on all platforms with full path
         )
         sys.exit(result.returncode)
     except KeyboardInterrupt:
         # Handle Ctrl+C gracefully
         print("\nInterrupted by user", file=sys.stderr)
         sys.exit(130)
-    except subprocess.TimeoutExpired:
-        print("ERROR: Command timed out after waiting too long", file=sys.stderr)
-        sys.exit(1)
     except Exception as e:
         print(f"ERROR: Failed to execute promptfoo: {e}", file=sys.stderr)
         sys.exit(1)
