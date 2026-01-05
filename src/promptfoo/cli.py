@@ -6,6 +6,7 @@ It executes the npx promptfoo command and passes through all arguments.
 """
 
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -57,18 +58,25 @@ def main() -> NoReturn:
     # Use the full path to npx for Windows compatibility
     cmd = [npx_path, "--yes", "promptfoo@latest"] + sys.argv[1:]
 
+    # On Windows, use shell=True to properly handle .cmd files
+    is_windows = platform.system() == "Windows"
+
     try:
-        # Execute the command and inherit stdio
+        # Execute the command and pass through stdio
         result = subprocess.run(
             cmd,
             env=os.environ.copy(),
             check=False,  # Don't raise exception on non-zero exit
+            shell=is_windows,  # Use shell on Windows for .cmd compatibility
         )
         sys.exit(result.returncode)
     except KeyboardInterrupt:
         # Handle Ctrl+C gracefully
         print("\nInterrupted by user", file=sys.stderr)
         sys.exit(130)
+    except subprocess.TimeoutExpired:
+        print("ERROR: Command timed out after waiting too long", file=sys.stderr)
+        sys.exit(1)
     except Exception as e:
         print(f"ERROR: Failed to execute promptfoo: {e}", file=sys.stderr)
         sys.exit(1)
