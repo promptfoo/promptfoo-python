@@ -55,12 +55,20 @@ def main() -> NoReturn:
 
     # Build the command: npx promptfoo@latest <args>
     # Use @latest to always get the most recent version
-    # Use the full path to npx for Windows compatibility
-    cmd = [npx_path, "--yes", "promptfoo@latest"] + sys.argv[1:]
+    is_windows = platform.system() == "Windows"
 
-    # On Windows Python 3.9, we need shell=True for proper .cmd execution
-    # On other platforms/versions, use shell=False to avoid npm cache issues
-    is_windows_py39 = platform.system() == "Windows" and sys.version_info[:2] == (3, 9)
+    # On Windows, we need special handling for .cmd files
+    if is_windows:
+        # On Windows, build command as string for shell=True
+        # This properly handles npx.cmd batch file execution
+        import shlex
+        args = ["npx", "--yes", "promptfoo@latest"] + sys.argv[1:]
+        cmd = " ".join(shlex.quote(arg) for arg in args)
+        use_shell = True
+    else:
+        # On Unix, use list format with shell=False (more secure)
+        cmd = [npx_path, "--yes", "promptfoo@latest"] + sys.argv[1:]
+        use_shell = False
 
     try:
         # Execute the command and pass through stdio
@@ -68,7 +76,7 @@ def main() -> NoReturn:
             cmd,
             env=os.environ.copy(),
             check=False,  # Don't raise exception on non-zero exit
-            shell=is_windows_py39,  # Only use shell on Windows Python 3.9
+            shell=use_shell,
         )
         sys.exit(result.returncode)
     except KeyboardInterrupt:
