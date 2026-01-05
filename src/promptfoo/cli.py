@@ -12,6 +12,7 @@ import sys
 from typing import NoReturn, Optional
 
 _WRAPPER_ENV = "PROMPTFOO_PY_WRAPPER"
+_WINDOWS_SHELL_EXTENSIONS = (".bat", ".cmd")
 
 
 def check_node_installed() -> bool:
@@ -73,6 +74,19 @@ def _find_external_promptfoo() -> Optional[str]:
     return promptfoo_path
 
 
+def _requires_shell(executable: str) -> bool:
+    if os.name != "nt":
+        return False
+    _, ext = os.path.splitext(executable)
+    return ext.lower() in _WINDOWS_SHELL_EXTENSIONS
+
+
+def _run_command(cmd: list[str], env: Optional[dict[str, str]] = None) -> subprocess.CompletedProcess:
+    if _requires_shell(cmd[0]):
+        return subprocess.run(subprocess.list2cmdline(cmd), shell=True, env=env)
+    return subprocess.run(cmd, env=env)
+
+
 def main() -> NoReturn:
     """
     Main entry point for the promptfoo CLI wrapper.
@@ -90,15 +104,17 @@ def main() -> NoReturn:
         cmd = [promptfoo_path] + sys.argv[1:]
         env = os.environ.copy()
         env[_WRAPPER_ENV] = "1"
-        result = subprocess.run(cmd, env=env)
-    elif shutil.which("npx"):
-        cmd = ["npx", "-y", "promptfoo@latest"] + sys.argv[1:]
-        result = subprocess.run(cmd)
+        result = _run_command(cmd, env=env)
     else:
-        print("ERROR: Neither promptfoo nor npx is available.", file=sys.stderr)
-        print("Please install promptfoo: npm install -g promptfoo", file=sys.stderr)
-        print("Or ensure Node.js is properly installed.", file=sys.stderr)
-        sys.exit(1)
+        npx_path = shutil.which("npx")
+        if npx_path:
+            cmd = [npx_path, "-y", "promptfoo@latest"] + sys.argv[1:]
+            result = _run_command(cmd)
+        else:
+            print("ERROR: Neither promptfoo nor npx is available.", file=sys.stderr)
+            print("Please install promptfoo: npm install -g promptfoo", file=sys.stderr)
+            print("Or ensure Node.js is properly installed.", file=sys.stderr)
+            sys.exit(1)
 
     sys.exit(result.returncode)
 
