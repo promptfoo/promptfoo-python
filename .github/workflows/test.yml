@@ -87,7 +87,12 @@ jobs:
         run: uv sync
 
       - name: Test CLI can be invoked
-        run: uv run promptfoo --version
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 5
+          max_attempts: 2
+          retry_on: error
+          command: uv run promptfoo --version
 
       - name: Test Node.js detection
         run: uv run python -c "from promptfoo.cli import check_node_installed, check_npx_installed; assert check_node_installed(); assert check_npx_installed()"
