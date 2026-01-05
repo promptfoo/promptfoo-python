@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from typing import NoReturn
 
 
@@ -35,6 +36,36 @@ def print_installation_help() -> None:
     print("  https://github.com/nvm-sh/nvm", file=sys.stderr)
 
 
+def run_with_retry(cmd: list[str], max_retries: int = 3, retry_delay: float = 0.5) -> subprocess.CompletedProcess:
+    """
+    Run a command with retry logic for transient failures.
+
+    Handles EAGAIN (Errno 35) and similar resource temporarily unavailable errors
+    that can occur on GitHub Actions macOS runners.
+    """
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            return subprocess.run(
+                cmd,
+                env=os.environ.copy(),
+                stdin=subprocess.DEVNULL,  # Prevent prompts from blocking
+                check=False,  # Don't raise exception on non-zero exit
+                shell=False,  # Keep shell=False for security
+            )
+        except OSError as e:
+            # Handle resource temporarily unavailable (EAGAIN/Errno 35)
+            # Common on CI runners when starting many processes quickly
+            last_error = e
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+                continue
+            raise
+
+    # This should never be reached due to raise in loop, but makes mypy happy
+    raise last_error  # type: ignore[misc]
+
+
 def main() -> NoReturn:
     """
     Main entry point for the promptfoo CLI wrapper.
@@ -56,13 +87,7 @@ def main() -> NoReturn:
         try:
             # Try the globally installed version first (preferred for speed)
             cmd = [promptfoo_path] + sys.argv[1:]
-            result = subprocess.run(
-                cmd,
-                env=os.environ.copy(),
-                stdin=subprocess.DEVNULL,  # Prevent prompts from blocking
-                check=False,  # Don't raise exception on non-zero exit
-                shell=False,  # Keep shell=False for security
-            )
+            result = run_with_retry(cmd)
             sys.exit(result.returncode)
         except (OSError, PermissionError):
             # Global executable exists but failed to run (resource issues, permissions, etc.)
@@ -87,13 +112,7 @@ def main() -> NoReturn:
         # Build and execute the npx fallback command
         # Use -y (short form) which is more widely supported than --yes
         cmd = [npx_path, "-y", "promptfoo@latest"] + sys.argv[1:]
-        result = subprocess.run(
-            cmd,
-            env=os.environ.copy(),
-            stdin=subprocess.DEVNULL,  # Prevent prompts from blocking
-            check=False,  # Don't raise exception on non-zero exit
-            shell=False,  # Keep shell=False for security
-        )
+        result = run_with_retry(cmd)
         sys.exit(result.returncode)
     except KeyboardInterrupt:
         # Handle Ctrl+C gracefully
