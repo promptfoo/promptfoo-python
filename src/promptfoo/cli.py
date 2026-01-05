@@ -10,7 +10,7 @@ import platform
 import shutil
 import subprocess
 import sys
-from typing import NoReturn
+from typing import NoReturn, Union
 
 
 def check_node_installed() -> bool:
@@ -58,10 +58,12 @@ def main() -> NoReturn:
     is_windows = platform.system() == "Windows"
 
     # On Windows, we need special handling for .cmd files
+    cmd: Union[str, list[str]]
     if is_windows:
         # On Windows, build command as string for shell=True
         # This properly handles npx.cmd batch file execution
         import shlex
+
         args = ["npx", "--yes", "promptfoo@latest"] + sys.argv[1:]
         cmd = " ".join(shlex.quote(arg) for arg in args)
         use_shell = True
