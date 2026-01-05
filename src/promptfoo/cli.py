@@ -10,7 +10,7 @@ import platform
 import shutil
 import subprocess
 import sys
-from typing import NoReturn
+from typing import NoReturn, Union
 
 
 def check_node_installed() -> bool:
@@ -53,36 +53,50 @@ def main() -> NoReturn:
     # Try to find a globally installed promptfoo first
     promptfoo_path = shutil.which("promptfoo")
 
-    # Build the command list (always use shell=False for security)
-    # On Windows, we use cmd.exe to execute .cmd files properly
-    if promptfoo_path:
-        # Use the globally installed promptfoo
-        cmd = ["cmd", "/c", promptfoo_path] + sys.argv[1:] if is_windows else [promptfoo_path] + sys.argv[1:]
-    else:
-        # Fall back to npx promptfoo@latest
-        npx_path = shutil.which("npx")
-        if not npx_path:
-            print("ERROR: promptfoo is not installed and npx is not available.", file=sys.stderr)
-            print("Please install promptfoo globally: npm install -g promptfoo", file=sys.stderr)
-            sys.exit(1)
+    # Build the command
+    # On Windows: use shell=True for .cmd file compatibility
+    # On Unix: use shell=False for security
+    cmd: Union[str, list[str]]
+    use_shell: bool
 
-        cmd = (
-            ["cmd", "/c", npx_path, "--yes", "promptfoo@latest"] + sys.argv[1:]
-            if is_windows
-            else [npx_path, "--yes", "promptfoo@latest"] + sys.argv[1:]
-        )
+    if is_windows:
+        # Windows requires shell=True or cmd.exe to run .cmd files
+        # Use subprocess list form which is safer than string form
+        import shlex
+
+        if promptfoo_path:
+            args = ["promptfoo"] + sys.argv[1:]
+        else:
+            # Fall back to npx
+            if not shutil.which("npx"):
+                print("ERROR: promptfoo is not installed and npx is not available.", file=sys.stderr)
+                print("Please install promptfoo globally: npm install -g promptfoo", file=sys.stderr)
+                sys.exit(1)
+            args = ["npx", "--yes", "promptfoo@latest"] + sys.argv[1:]
+
+        # On Windows, use shell=True with properly quoted arguments
+        cmd = " ".join(shlex.quote(arg) for arg in args)
+        use_shell = True
+    else:
+        # Unix: use shell=False for security
+        if promptfoo_path:
+            cmd = [promptfoo_path] + sys.argv[1:]
+        else:
+            npx_path = shutil.which("npx")
+            if not npx_path:
+                print("ERROR: promptfoo is not installed and npx is not available.", file=sys.stderr)
+                print("Please install promptfoo globally: npm install -g promptfoo", file=sys.stderr)
+                sys.exit(1)
+            cmd = [npx_path, "--yes", "promptfoo@latest"] + sys.argv[1:]
+        use_shell = False
 
     try:
-        # Execute the command with shell=False (more secure)
-        # Explicitly pass stdin, stdout, stderr to avoid resource blocking issues
+        # Execute the command
         result = subprocess.run(
             cmd,
             env=os.environ.copy(),
-            stdin=sys.stdin,
-            stdout=sys.stdout,
-            stderr=sys.stderr,
             check=False,  # Don't raise exception on non-zero exit
-            shell=False,  # Always False - more secure
+            shell=use_shell,
         )
         sys.exit(result.returncode)
     except KeyboardInterrupt:

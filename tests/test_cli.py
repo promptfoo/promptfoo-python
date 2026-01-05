@@ -73,7 +73,7 @@ class TestMain:
             assert exc_info.value.code == 0
 
     def test_uses_global_promptfoo_when_available_windows(self):
-        """Test using globally installed promptfoo on Windows with cmd.exe."""
+        """Test using globally installed promptfoo on Windows with shell=True."""
         with mock.patch("promptfoo.cli.check_node_installed", return_value=True), mock.patch(
             "platform.system", return_value="Windows"
         ), mock.patch("shutil.which") as mock_which, mock.patch("subprocess.run") as mock_run:
@@ -88,11 +88,14 @@ class TestMain:
                 with pytest.raises(SystemExit) as exc_info:
                     cli.main()
 
-            # Verify cmd.exe is used on Windows
+            # Verify shell=True is used on Windows
             mock_run.assert_called_once()
             call_args = mock_run.call_args
-            assert call_args[0][0][:3] == ["cmd", "/c", "C:\\Program Files\\nodejs\\promptfoo.cmd"]
-            assert call_args[1]["shell"] is False
+            # On Windows, command is a string (shell=True)
+            assert isinstance(call_args[0][0], str)
+            assert "promptfoo" in call_args[0][0]
+            assert "--version" in call_args[0][0]
+            assert call_args[1]["shell"] is True
             assert exc_info.value.code == 0
 
     def test_falls_back_to_npx_when_promptfoo_not_installed_unix(self):
@@ -117,7 +120,7 @@ class TestMain:
             assert exc_info.value.code == 0
 
     def test_falls_back_to_npx_when_promptfoo_not_installed_windows(self):
-        """Test fallback to npx with cmd.exe when promptfoo is not installed on Windows."""
+        """Test fallback to npx with shell=True when promptfoo is not installed on Windows."""
         with mock.patch("promptfoo.cli.check_node_installed", return_value=True), mock.patch(
             "platform.system", return_value="Windows"
         ), mock.patch("shutil.which") as mock_which, mock.patch("subprocess.run") as mock_run:
@@ -130,11 +133,16 @@ class TestMain:
                 with pytest.raises(SystemExit) as exc_info:
                     cli.main()
 
-            # Verify cmd.exe is used for npx on Windows
+            # Verify shell=True is used for npx on Windows
             mock_run.assert_called_once()
             call_args = mock_run.call_args
-            assert call_args[0][0][:4] == ["cmd", "/c", "C:\\Program Files\\nodejs\\npx.cmd", "--yes"]
-            assert call_args[1]["shell"] is False
+            # On Windows, command is a string (shell=True)
+            assert isinstance(call_args[0][0], str)
+            assert "npx" in call_args[0][0]
+            assert "--yes" in call_args[0][0]
+            assert "promptfoo@latest" in call_args[0][0]
+            assert "eval" in call_args[0][0]
+            assert call_args[1]["shell"] is True
             assert exc_info.value.code == 0
 
     def test_exits_when_neither_promptfoo_nor_npx_available(self, capsys):
