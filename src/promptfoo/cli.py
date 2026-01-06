@@ -105,9 +105,7 @@ def _find_external_promptfoo() -> Optional[str]:
     if argv0_path and _normalize_path(promptfoo_path) == argv0_path:
         wrapper_dir = _normalize_path(os.path.dirname(promptfoo_path))
         path_entries = [
-            entry
-            for entry in _split_path(os.environ.get("PATH", ""))
-            if _normalize_path(entry) != wrapper_dir
+            entry for entry in _split_path(os.environ.get("PATH", "")) if _normalize_path(entry) != wrapper_dir
         ]
         if path_entries:
             candidate = shutil.which("promptfoo", path=os.pathsep.join(path_entries))
