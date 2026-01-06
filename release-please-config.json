@@ -1,0 +1,18 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "python",
+      "package-name": "promptfoo",
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true,
+      "extra-files": [
+        {
+          "type": "generic",
+          "path": "pyproject.toml",
+          "glob": false
+        }
+      ]
+    }
+  }
+}
