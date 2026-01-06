@@ -41,37 +41,54 @@ def _detect_linux_distro() -> tuple[Optional[str], Optional[str]]:
         Tuple of (distro_id, version) where distro_id is normalized
         (e.g., "ubuntu", "debian", "rhel", "alpine", "arch")
     """
-    # Try /etc/os-release first (most modern systems)
-    os_release_path = Path("/etc/os-release")
-    if os_release_path.exists():
-        try:
-            with open(os_release_path) as f:
-                os_release = {}
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith("#"):
-                        continue
-                    if "=" in line:
-                        key, _, value = line.partition("=")
-                        # Remove quotes
-                        value = value.strip('"').strip("'")
-                        os_release[key] = value
+    # Define known distros for normalization
+    known_base_distros = {"ubuntu", "debian", "alpine", "arch", "fedora"}
+    rhel_family = {"rhel", "centos", "rocky", "almalinux", "ol", "amzn"}
+    suse_family = {"opensuse", "opensuse-leap", "opensuse-tumbleweed", "sles"}
 
-                distro_id = os_release.get("ID", "").lower()
-                version = os_release.get("VERSION_ID", "")
+    # Try /etc/os-release first, then /usr/lib/os-release (per freedesktop spec)
+    for os_release_path in [Path("/etc/os-release"), Path("/usr/lib/os-release")]:
+        if os_release_path.exists():
+            try:
+                with open(os_release_path) as f:
+                    os_release = {}
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith("#"):
+                            continue
+                        if "=" in line:
+                            key, _, value = line.partition("=")
+                            # Remove quotes
+                            value = value.strip('"').strip("'")
+                            os_release[key] = value
 
-                # Normalize some distro IDs
-                if distro_id in ("ubuntu", "debian", "alpine", "arch", "fedora"):
+                    distro_id = os_release.get("ID", "").lower()
+                    version = os_release.get("VERSION_ID", "")
+                    id_like = os_release.get("ID_LIKE", "").lower().split()
+
+                    # Normalize distro IDs
+                    if distro_id in known_base_distros:
+                        return distro_id, version
+                    elif distro_id in rhel_family:
+                        # Oracle Linux (ol), Amazon Linux (amzn)
+                        return "rhel", version
+                    elif distro_id in suse_family:
+                        return "suse", version
+
+                    # Check ID_LIKE for derivative distributions (e.g., Pop!_OS, Raspbian, Mint)
+                    if id_like:
+                        for parent in id_like:
+                            if parent in known_base_distros:
+                                return parent, version
+                            elif parent in rhel_family:
+                                return "rhel", version
+                            elif parent in suse_family:
+                                return "suse", version
+
+                    # Return the raw distro_id if we couldn't normalize it
                     return distro_id, version
-                elif distro_id in ("rhel", "centos", "rocky", "almalinux", "ol", "amzn"):
-                    # Oracle Linux (ol), Amazon Linux (amzn)
-                    return "rhel", version
-                elif distro_id in ("opensuse", "opensuse-leap", "opensuse-tumbleweed", "sles"):
-                    return "suse", version
-
-                return distro_id, version
-        except OSError:
-            pass
+            except OSError:
+                pass
 
     # Fallback: check for specific files
     if Path("/etc/debian_version").exists():

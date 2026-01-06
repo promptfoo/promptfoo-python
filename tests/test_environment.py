@@ -32,6 +32,102 @@ class TestLinuxDistroDetection:
         assert isinstance(distro, (str, type(None)))
         assert isinstance(version, (str, type(None)))
 
+    def test_detect_derivative_distro_pop_os(self, tmp_path: Path) -> None:
+        """Detect Pop!_OS as Ubuntu derivative via ID_LIKE."""
+        os_release = tmp_path / "os-release"
+        os_release.write_text('ID=pop\nVERSION_ID="22.04"\nID_LIKE="ubuntu debian"')
+
+        os_release_data = 'ID=pop\nVERSION_ID="22.04"\nID_LIKE="ubuntu debian"'
+
+        with (
+            mock.patch("promptfoo.environment.Path") as mock_path_class,
+            mock.patch("builtins.open", mock.mock_open(read_data=os_release_data)),
+        ):
+
+            def path_side_effect(path_str: str) -> mock.Mock:
+                mock_path_obj = mock.Mock()
+                if path_str == "/etc/os-release":
+                    mock_path_obj.exists.return_value = True
+                    mock_path_obj.__truediv__ = lambda self, other: os_release
+                    # Make the mock path object work with open()
+                    return os_release
+                else:
+                    mock_path_obj.exists.return_value = False
+                return mock_path_obj
+
+            mock_path_class.side_effect = path_side_effect
+
+            distro, version = _detect_linux_distro()
+            assert distro == "ubuntu"  # Should resolve to parent via ID_LIKE
+            assert version == "22.04"
+
+    def test_detect_derivative_distro_raspbian(self, tmp_path: Path) -> None:
+        """Detect Raspbian as Debian derivative via ID_LIKE."""
+        os_release_data = 'ID=raspbian\nVERSION_ID="11"\nID_LIKE=debian'
+
+        with (
+            mock.patch("builtins.open", mock.mock_open(read_data=os_release_data)),
+            mock.patch("promptfoo.environment.Path") as mock_path_class,
+        ):
+            mock_path_obj = mock.Mock()
+            mock_path_obj.exists.return_value = True
+            mock_path_class.return_value = mock_path_obj
+
+            distro, version = _detect_linux_distro()
+            assert distro == "debian"  # Should resolve to parent via ID_LIKE
+            assert version == "11"
+
+    def test_detect_derivative_distro_linux_mint(self, tmp_path: Path) -> None:
+        """Detect Linux Mint as Ubuntu derivative via ID_LIKE."""
+        os_release_data = 'ID=linuxmint\nVERSION_ID="21"\nID_LIKE="ubuntu debian"'
+
+        with (
+            mock.patch("builtins.open", mock.mock_open(read_data=os_release_data)),
+            mock.patch("promptfoo.environment.Path") as mock_path_class,
+        ):
+            mock_path_obj = mock.Mock()
+            mock_path_obj.exists.return_value = True
+            mock_path_class.return_value = mock_path_obj
+
+            distro, version = _detect_linux_distro()
+            assert distro == "ubuntu"  # Should resolve to first known parent in ID_LIKE
+            assert version == "21"
+
+    def test_usr_lib_os_release_fallback(self, tmp_path: Path) -> None:
+        """Detect distro from /usr/lib/os-release if /etc/os-release missing."""
+        with mock.patch("promptfoo.environment.Path") as mock_path_class:
+
+            def path_exists_side_effect(path_obj: mock.Mock) -> bool:
+                # /etc/os-release doesn't exist, /usr/lib/os-release does
+                if "/etc/os-release" in str(path_obj):
+                    return False
+                elif "/usr/lib/os-release" in str(path_obj):
+                    return True
+                return False
+
+            # Create mock Path objects
+            etc_path = mock.Mock()
+            etc_path.exists.return_value = False
+            etc_path.__str__ = lambda self: "/etc/os-release"
+
+            usr_path = mock.Mock()
+            usr_path.exists.return_value = True
+            usr_path.__str__ = lambda self: "/usr/lib/os-release"
+
+            def path_constructor(path_str: str) -> mock.Mock:
+                if path_str == "/etc/os-release":
+                    return etc_path
+                elif path_str == "/usr/lib/os-release":
+                    return usr_path
+                return mock.Mock()
+
+            mock_path_class.side_effect = path_constructor
+
+            with mock.patch("builtins.open", mock.mock_open(read_data='ID=ubuntu\nVERSION_ID="22.04"')):
+                distro, version = _detect_linux_distro()
+                assert distro == "ubuntu"
+                assert version == "22.04"
+
 
 class TestCloudProviderDetection:
     """Test cloud provider detection."""
