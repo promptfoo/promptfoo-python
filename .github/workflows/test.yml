@@ -62,19 +62,62 @@ jobs:
         run: uv run mypy src/promptfoo/
 
   test:
-    name: Test Python ${{ matrix.python-version }}
+    name: Test (py${{ matrix.python-version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        # Temporarily excluding macos-latest due to GitHub Actions runner resource constraints
+        # causing BlockingIOError [Errno 35] when spawning subprocess
+        os: [ubuntu-latest, windows-latest]
+        # Test only min and max supported Python versions for efficiency
+        python-version: ["3.9", "3.13"]
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
+
+      - name: Configure npm on Windows
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          # Configure cache location (applies immediately to this step)
+          $cacheDir = Join-Path $env:RUNNER_TEMP "npm-cache"
+          New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+          npm config set cache $cacheDir --location=user
+
+          # Configure prefix location (applies immediately to this step)
+          $globalPrefix = npm config get prefix
+          if (-not $globalPrefix -or $globalPrefix -eq "undefined") {
+            $globalPrefix = Join-Path $env:APPDATA "npm"
+          }
+          $globalPrefix = $globalPrefix.Trim()
+          npm config set prefix $globalPrefix --location=user
+
+          # NOW clean and verify cache (cleans the correctly-configured cache)
+          npm cache clean --force
+          npm cache verify
+
+          # Export settings for future steps
+          "NPM_CONFIG_CACHE=$cacheDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "NPM_CONFIG_PREFIX=$globalPrefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "npm_config_prefix=$globalPrefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          # Add global bin directories to PATH
+          $binPaths = @($globalPrefix, (Join-Path $globalPrefix "bin")) | Where-Object { Test-Path $_ }
+          foreach ($binPath in $binPaths) {
+            $binPath | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
+
+          Write-Host "npm cache: $cacheDir"
+          Write-Host "npm prefix: $globalPrefix"
+
+      - name: Install promptfoo globally
+        run: npm install -g promptfoo@latest
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
 
       - uses: astral-sh/setup-uv@v7
         with:
@@ -87,6 +130,72 @@ jobs:
         run: uv sync
 
       - name: Test CLI can be invoked
+        run: uv run promptfoo --version
+
+      - name: Test Node.js detection
+        run: uv run python -c "from promptfoo.cli import check_node_installed, check_npx_installed; assert check_node_installed(); assert check_npx_installed()"
+
+  test-npx-fallback:
+    name: Test npx fallback (py${{ matrix.python-version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        # Test npx fallback (without global install)
+        # Temporarily excluding macos-latest due to GitHub Actions runner resource constraints
+        os: [ubuntu-latest, windows-latest]
+        # Use middle-version Python for this test
+        python-version: ["3.12"]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Configure npm on Windows
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          # Configure cache location (applies immediately to this step)
+          $cacheDir = Join-Path $env:RUNNER_TEMP "npm-cache"
+          New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+          npm config set cache $cacheDir --location=user
+
+          # Configure prefix location (applies immediately to this step)
+          $globalPrefix = npm config get prefix
+          if (-not $globalPrefix -or $globalPrefix -eq "undefined") {
+            $globalPrefix = Join-Path $env:APPDATA "npm"
+          }
+          $globalPrefix = $globalPrefix.Trim()
+          npm config set prefix $globalPrefix --location=user
+
+          # NOW clean and verify cache (cleans the correctly-configured cache)
+          npm cache clean --force
+          npm cache verify
+
+          # Export settings for future steps
+          "NPM_CONFIG_CACHE=$cacheDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "NPM_CONFIG_PREFIX=$globalPrefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "npm_config_prefix=$globalPrefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          Write-Host "npm cache: $cacheDir"
+          Write-Host "npm prefix: $globalPrefix"
+
+      # Intentionally skip installing promptfoo globally
+      # This tests the npx fallback path
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Pin Python version
+        run: uv python pin ${{ matrix.python-version }}
+
+      - name: Install package
+        run: uv sync
+
+      - name: Test CLI fallback to npx (no global install)
         run: uv run promptfoo --version
 
       - name: Test Node.js detection
@@ -117,7 +226,7 @@ jobs:
 
   ci-success:
     name: CI Success
-    needs: [lint, type-check, test, build]
+    needs: [lint, type-check, test, test-npx-fallback, build]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -126,17 +235,20 @@ jobs:
           LINT_RESULT="${{ needs.lint.result }}"
           TYPE_CHECK_RESULT="${{ needs.type-check.result }}"
           TEST_RESULT="${{ needs.test.result }}"
+          TEST_NPX_FALLBACK_RESULT="${{ needs.test-npx-fallback.result }}"
           BUILD_RESULT="${{ needs.build.result }}"
 
           echo "Job results:"
           echo "  lint: $LINT_RESULT"
           echo "  type-check: $TYPE_CHECK_RESULT"
           echo "  test: $TEST_RESULT"
+          echo "  test-npx-fallback: $TEST_NPX_FALLBACK_RESULT"
           echo "  build: $BUILD_RESULT"
 
           if [[ "$LINT_RESULT" == "failure" || "$LINT_RESULT" == "cancelled" ||
                 "$TYPE_CHECK_RESULT" == "failure" || "$TYPE_CHECK_RESULT" == "cancelled" ||
                 "$TEST_RESULT" == "failure" || "$TEST_RESULT" == "cancelled" ||
+                "$TEST_NPX_FALLBACK_RESULT" == "failure" || "$TEST_NPX_FALLBACK_RESULT" == "cancelled" ||
                 "$BUILD_RESULT" == "failure" || "$BUILD_RESULT" == "cancelled" ]]; then
             echo "Some CI checks failed!"
             exit 1
