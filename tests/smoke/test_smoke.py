@@ -13,6 +13,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 import pytest
 
@@ -28,9 +29,9 @@ OUTPUT_DIR = SMOKE_DIR / ".temp-output"
 
 def run_promptfoo(
     args: list[str],
-    cwd: Path | None = None,
+    cwd: Optional[Path] = None,
     expect_error: bool = False,
-    env: dict[str, str] | None = None,
+    env: Optional[dict[str, str]] = None,
 ) -> tuple[str, str, int]:
     """
     Run promptfoo CLI and capture output.
