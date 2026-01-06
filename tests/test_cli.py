@@ -104,6 +104,7 @@ class TestPathUtilities:
         """Quote stripping handles various quote patterns correctly."""
         assert _strip_quotes(input_path) == expected
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-style PATH separator test")
     @pytest.mark.parametrize(
         "path_value,expected",
         [
@@ -115,8 +116,24 @@ class TestPathUtilities:
             (":::", []),  # Only separators
         ],
     )
-    def test_split_path(self, path_value: str, expected: list[str]) -> None:
-        """PATH splitting handles quotes, empty entries, and whitespace."""
+    def test_split_path_unix(self, path_value: str, expected: list[str]) -> None:
+        """PATH splitting handles quotes, empty entries, and whitespace on Unix."""
+        assert _split_path(path_value) == expected
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-style PATH separator test")
+    @pytest.mark.parametrize(
+        "path_value,expected",
+        [
+            ("C:\\bin;C:\\tools", ["C:\\bin", "C:\\tools"]),
+            ('"C:\\bin";C:\\tools', ["C:\\bin", "C:\\tools"]),
+            ("C:\\bin;;C:\\tools", ["C:\\bin", "C:\\tools"]),  # Empty entry removed
+            ("  C:\\bin  ;  C:\\tools  ", ["C:\\bin", "C:\\tools"]),  # Whitespace
+            ("", []),
+            (";;;", []),  # Only separators
+        ],
+    )
+    def test_split_path_windows(self, path_value: str, expected: list[str]) -> None:
+        """PATH splitting handles quotes, empty entries, and whitespace on Windows."""
         assert _split_path(path_value) == expected
 
 
@@ -224,8 +241,9 @@ class TestExternalPromptfooDiscovery:
         result = _find_external_promptfoo()
         assert result == promptfoo_path
 
-    def test_find_external_promptfoo_prevents_recursion(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Filters out wrapper directory from PATH to prevent recursion."""
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-specific recursion test")
+    def test_find_external_promptfoo_prevents_recursion_unix(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Filters out wrapper directory from PATH to prevent recursion on Unix."""
         wrapper_path = "/home/user/.local/bin/promptfoo"
         real_promptfoo = "/usr/local/bin/promptfoo"
 
@@ -239,6 +257,29 @@ class TestExternalPromptfooDiscovery:
                 return wrapper_path
             # When called with filtered PATH, return the real one
             if "/home/user/.local/bin" not in path:
+                return real_promptfoo
+            return None
+
+        monkeypatch.setattr("shutil.which", mock_which)
+        result = _find_external_promptfoo()
+        assert result == real_promptfoo
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-specific recursion test")
+    def test_find_external_promptfoo_prevents_recursion_windows(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Filters out wrapper directory from PATH to prevent recursion on Windows."""
+        wrapper_path = "C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\promptfoo.exe"
+        real_promptfoo = "C:\\npm\\prefix\\promptfoo.cmd"
+
+        monkeypatch.setattr(sys, "argv", [wrapper_path])
+        monkeypatch.setenv("PATH", "C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python312\\Scripts;C:\\npm\\prefix")
+
+        def mock_which(cmd: str, path: Optional[str] = None) -> Optional[str]:
+            if cmd != "promptfoo":
+                return None
+            if path is None:
+                return wrapper_path
+            # When called with filtered PATH, return the real one
+            if "Python312\\Scripts" not in path:
                 return real_promptfoo
             return None
 
@@ -427,9 +468,12 @@ class TestMainFunction:
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
     ) -> None:
         """Exits with error when neither external promptfoo nor npx found."""
+        # Use platform-appropriate path for node
+        node_path = "C:\\Program Files\\nodejs\\node.exe" if sys.platform == "win32" else "/usr/bin/node"
+
         monkeypatch.setattr(sys, "argv", ["promptfoo", "eval"])
         monkeypatch.setattr("shutil.which", lambda cmd, path=None: {
-            "node": "/usr/bin/node"
+            "node": node_path
         }.get(cmd))
 
         with pytest.raises(SystemExit) as exc_info:
