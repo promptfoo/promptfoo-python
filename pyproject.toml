@@ -49,6 +49,7 @@ Documentation = "https://www.promptfoo.dev/docs"
 exclude = [
     "/.github",
     "/.gitignore",
+    "/.python-version",
     "/.release-please-manifest.json",
     "/release-please-config.json",
     "/renovate.json",
