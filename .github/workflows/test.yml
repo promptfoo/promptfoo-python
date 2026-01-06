@@ -126,8 +126,14 @@ jobs:
       - name: Pin Python version
         run: uv python pin ${{ matrix.python-version }}
 
-      - name: Install package
-        run: uv sync
+      - name: Install package with dev dependencies
+        run: uv sync --extra dev
+
+      - name: Run unit tests
+        run: uv run pytest tests/ -v -m 'not smoke'
+
+      - name: Run smoke tests
+        run: uv run pytest tests/smoke/ -v
 
       - name: Test CLI can be invoked
         run: uv run promptfoo --version
@@ -192,8 +198,14 @@ jobs:
       - name: Pin Python version
         run: uv python pin ${{ matrix.python-version }}
 
-      - name: Install package
-        run: uv sync
+      - name: Install package with dev dependencies
+        run: uv sync --extra dev
+
+      - name: Run unit tests
+        run: uv run pytest tests/ -v -m 'not smoke'
+
+      - name: Run smoke tests (with npx fallback)
+        run: uv run pytest tests/smoke/ -v
 
       - name: Test CLI fallback to npx (no global install)
         run: uv run promptfoo --version
