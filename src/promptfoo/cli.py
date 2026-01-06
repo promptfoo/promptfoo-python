@@ -26,16 +26,13 @@ def check_npx_installed() -> bool:
 
 
 def print_installation_help() -> None:
-    """Print helpful installation instructions for Node.js."""
-    print("ERROR: promptfoo requires Node.js to be installed.", file=sys.stderr)
-    print("", file=sys.stderr)
-    print("Please install Node.js:", file=sys.stderr)
-    print("  - macOS: brew install node", file=sys.stderr)
-    print("  - Ubuntu/Debian: sudo apt install nodejs npm", file=sys.stderr)
-    print("  - Windows: Download from https://nodejs.org/", file=sys.stderr)
-    print("", file=sys.stderr)
-    print("Or use nvm (Node Version Manager):", file=sys.stderr)
-    print("  https://github.com/nvm-sh/nvm", file=sys.stderr)
+    """Print contextual installation instructions for Node.js based on the environment."""
+    from .environment import detect_environment
+    from .instructions import get_installation_instructions
+
+    env = detect_environment()
+    instructions = get_installation_instructions(env)
+    print(instructions, file=sys.stderr)
 
 
 def _normalize_path(path: str) -> str:
