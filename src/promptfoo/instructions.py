@@ -211,16 +211,17 @@ def _get_debian_instructions(env: Environment) -> list[str]:
     if env.has_sudo:
         lines.extend(
             [
-                "Option 1 - Install from default repository:",
-                "   sudo apt update",
-                "   sudo apt install -y nodejs npm",
-                "",
-                "Option 2 - Install from NodeSource (recommended, newer version):",
+                "Option 1 - Install from NodeSource (recommended for production):",
                 "   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -",
                 "   sudo apt install -y nodejs",
                 "",
-                "Option 3 - Install using snap:",
+                "Option 2 - Install from default repository (may be outdated):",
+                "   sudo apt update",
+                "   sudo apt install -y nodejs npm",
+                "",
+                "Option 3 - Install using snap (not recommended for production):",
                 "   sudo snap install node --classic",
+                "   # Note: Snap auto-updates can cause unexpected behavior",
             ]
         )
     else:
@@ -350,15 +351,13 @@ def _get_macos_instructions() -> list[str]:
         "Option 1 - Homebrew (recommended):",
         "   brew install node",
         "",
-        "Option 2 - MacPorts:",
-        "   sudo port install nodejs",
-        "",
-        "Option 3 - nvm (Node Version Manager):",
+        "Option 2 - nvm (Node Version Manager, for version management):",
         "   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash",
         "   source ~/.zshrc  # or ~/.bashrc",
         "   nvm install 20",
         "",
-        "Option 4 - Download installer from https://nodejs.org/",
+        "Option 3 - Official installer:",
+        "   Download from https://nodejs.org/",
     ]
 
 
@@ -367,17 +366,20 @@ def _get_windows_instructions() -> list[str]:
     return [
         "WINDOWS INSTALLATION:",
         "",
-        "Option 1 - winget (Windows 10+):",
-        "   winget install OpenJS.NodeJS",
+        "Option 1 - Official installer (recommended):",
+        "   Download from https://nodejs.org/",
         "",
-        "Option 2 - Chocolatey:",
-        "   choco install nodejs",
+        "Option 2 - winget (Windows 10/11, built-in):",
+        "   winget install OpenJS.NodeJS.LTS  # For LTS version",
+        "   # or: winget install OpenJS.NodeJS  # For current version",
         "",
-        "Option 3 - Scoop:",
-        "   scoop install nodejs",
+        "Option 3 - Chocolatey:",
+        "   choco install nodejs-lts  # For LTS version",
+        "   # or: choco install nodejs  # For current version",
         "",
-        "Option 4 - Download installer:",
-        "   https://nodejs.org/",
+        "Option 4 - Scoop:",
+        "   scoop install nodejs-lts  # For LTS version",
+        "   # or: scoop install nodejs  # For current version",
     ]
 
 

@@ -260,8 +260,9 @@ class TestMacOSInstructions:
 
         assert "MACOS" in instructions
         assert "brew install node" in instructions
-        assert "MacPorts" in instructions
+        assert "Official installer" in instructions
         assert "nvm" in instructions
+        assert "nodejs.org" in instructions
 
 
 class TestWindowsInstructions:
