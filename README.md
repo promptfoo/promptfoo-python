@@ -12,7 +12,7 @@
 
 > **📦 About this Python package**
 >
-> This is a lightweight wrapper that installs promptfoo via `pip`. It requires **Node.js 18+** and executes `npx promptfoo@latest` under the hood.
+> This is a lightweight wrapper that installs promptfoo via `pip`. It requires **Node.js 20+** and executes `npx promptfoo@latest` under the hood.
 >
 > **💡 If you have Node.js installed**, we recommend using `npx promptfoo@latest` directly for better performance:
 >
@@ -48,7 +48,7 @@
 ### Requirements
 
 - **Python 3.9+** (for this wrapper)
-- **Node.js 18+** (required to run promptfoo)
+- **Node.js 20+** (required to run promptfoo)
 
 ### Install from PyPI
 
