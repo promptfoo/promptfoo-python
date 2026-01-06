@@ -25,6 +25,7 @@ class Environment:
     is_cloud_function: bool = False  # GCP Cloud Functions or Azure Functions
     is_docker: bool = False
     is_kubernetes: bool = False
+    is_wsl: bool = False  # Windows Subsystem for Linux
     is_ci: bool = False
     ci_platform: Optional[str] = None  # "github", "gitlab", "circleci", "jenkins", etc.
     is_venv: bool = False
@@ -171,6 +172,32 @@ def _detect_container() -> tuple[bool, bool]:
     return is_docker, is_kubernetes
 
 
+def _detect_wsl() -> bool:
+    """
+    Detect if running in Windows Subsystem for Linux (WSL).
+
+    Returns:
+        True if running in WSL, False otherwise
+    """
+    # Check for WSL environment variable
+    if os.getenv("WSL_DISTRO_NAME") or os.getenv("WSL_INTEROP"):
+        return True
+
+    # Check /proc/version for Microsoft/WSL signatures
+    if Path("/proc/version").exists():
+        try:
+            with open("/proc/version") as f:
+                version_info = f.read().lower()
+                if "microsoft" in version_info or "wsl" in version_info:
+                    return True
+        except OSError:
+            pass
+
+    # Check for Windows filesystem mounts (WSL mounts Windows drives at /mnt/)
+    # This is less reliable but can catch WSL 1
+    return Path("/mnt/c").exists() and Path("/proc/version").exists()
+
+
 def _detect_ci() -> tuple[bool, Optional[str]]:
     """
     Detect if running in a CI/CD environment.
@@ -284,6 +311,11 @@ def detect_environment() -> Environment:
     if os_type == "linux":
         is_docker, is_kubernetes = _detect_container()
 
+    # WSL detection
+    is_wsl = False
+    if os_type == "linux":
+        is_wsl = _detect_wsl()
+
     # CI detection
     is_ci, ci_platform = _detect_ci()
 
@@ -302,6 +334,7 @@ def detect_environment() -> Environment:
         is_cloud_function=is_cloud_function,
         is_docker=is_docker,
         is_kubernetes=is_kubernetes,
+        is_wsl=is_wsl,
         is_ci=is_ci,
         ci_platform=ci_platform,
         is_venv=is_venv,

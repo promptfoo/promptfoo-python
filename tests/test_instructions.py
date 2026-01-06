@@ -129,6 +129,41 @@ class TestDockerInstructions:
         assert "Dockerfile" in instructions
 
 
+class TestWSLInstructions:
+    """Test instructions for WSL (Windows Subsystem for Linux)."""
+
+    def test_wsl_instructions(self) -> None:
+        """Generate WSL-specific instructions."""
+        env = Environment(
+            os_type="linux",
+            linux_distro="ubuntu",
+            is_wsl=True,
+        )
+
+        instructions = get_installation_instructions(env)
+
+        assert "WSL" in instructions or "Windows Subsystem for Linux" in instructions
+        assert "nvm" in instructions
+        assert "/mnt/c" in instructions  # Should mention Windows filesystem
+        assert "performance" in instructions.lower()
+
+    def test_wsl_with_ubuntu_shows_both(self) -> None:
+        """WSL instructions should show both WSL tips and Ubuntu instructions."""
+        env = Environment(
+            os_type="linux",
+            linux_distro="ubuntu",
+            is_wsl=True,
+            has_sudo=True,
+        )
+
+        instructions = get_installation_instructions(env)
+
+        # Should have WSL-specific guidance
+        assert "WSL" in instructions
+        # Should also have Ubuntu/Debian instructions
+        assert "UBUNTU" in instructions or "DEBIAN" in instructions
+
+
 class TestLinuxInstructions:
     """Test instructions for various Linux distributions."""
 

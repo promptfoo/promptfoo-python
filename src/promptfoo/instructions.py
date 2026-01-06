@@ -42,6 +42,11 @@ def get_installation_instructions(env: Environment) -> str:
         lines.extend(_get_docker_instructions(env))
         lines.append("")
 
+    # WSL environment
+    if env.is_wsl:
+        lines.extend(_get_wsl_instructions())
+        lines.append("")
+
     # Platform-specific instructions
     if env.os_type == "linux":
         lines.extend(_get_linux_instructions(env))
@@ -180,6 +185,28 @@ def _get_docker_instructions(env: Environment) -> list[str]:
         )
 
     return lines
+
+
+def _get_wsl_instructions() -> list[str]:
+    """Instructions for Windows Subsystem for Linux (WSL)."""
+    return [
+        "WINDOWS SUBSYSTEM FOR LINUX (WSL) DETECTED:",
+        "",
+        "IMPORTANT: Install Node.js within WSL, not from Windows.",
+        "Using Windows Node.js from WSL can cause path and performance issues.",
+        "",
+        "Recommended approach:",
+        "   1. Use your Linux distribution's package manager (see below)",
+        "   2. Or use nvm for version management:",
+        "      curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash",
+        "      source ~/.bashrc",
+        "      nvm install 20",
+        "",
+        "Tips for WSL:",
+        "   - Store project files in the WSL filesystem (~/), not /mnt/c/",
+        "   - This improves file I/O performance significantly",
+        "   - Use 'wsl --shutdown' to restart WSL if needed",
+    ]
 
 
 def _get_linux_instructions(env: Environment) -> list[str]:

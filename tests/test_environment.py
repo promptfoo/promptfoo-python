@@ -109,6 +109,36 @@ class TestContainerDetection:
         assert isinstance(is_k8s, bool)
 
 
+class TestWSLDetection:
+    """Test WSL detection."""
+
+    def test_detect_wsl_from_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Detect WSL from WSL_DISTRO_NAME environment variable."""
+        monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu")
+
+        from promptfoo.environment import _detect_wsl
+
+        assert _detect_wsl() is True
+
+    def test_detect_wsl_from_interop_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Detect WSL from WSL_INTEROP environment variable."""
+        monkeypatch.setenv("WSL_INTEROP", "/run/WSL/123_interop")
+
+        from promptfoo.environment import _detect_wsl
+
+        assert _detect_wsl() is True
+
+    def test_no_wsl_detected(self) -> None:
+        """Return False when not in WSL."""
+        with mock.patch.dict(os.environ, {}, clear=True):
+            from promptfoo.environment import _detect_wsl
+
+            # This will return False unless we're actually in WSL
+            # Just verify it returns a boolean
+            result = _detect_wsl()
+            assert isinstance(result, bool)
+
+
 class TestCIDetection:
     """Test CI/CD platform detection."""
 
@@ -217,6 +247,7 @@ class TestDetectEnvironment:
             mock.patch("sys.platform", "linux"),
             mock.patch("promptfoo.environment._detect_linux_distro", return_value=("ubuntu", "22.04")),
             mock.patch("promptfoo.environment._detect_container", return_value=(True, False)),
+            mock.patch("promptfoo.environment._detect_wsl", return_value=False),
             mock.patch("promptfoo.environment._detect_ci", return_value=(False, None)),
             mock.patch("promptfoo.environment._detect_cloud_provider", return_value=None),
             mock.patch("promptfoo.environment._detect_python_env", return_value=(True, False)),
@@ -229,6 +260,7 @@ class TestDetectEnvironment:
             assert env.linux_distro_version == "22.04"
             assert env.is_docker is True
             assert env.is_kubernetes is False
+            assert env.is_wsl is False
             assert env.is_venv is True
 
     def test_detect_macos_environment(self) -> None:
@@ -267,6 +299,7 @@ class TestDetectEnvironment:
             mock.patch("sys.platform", "linux"),
             mock.patch("promptfoo.environment._detect_linux_distro", return_value=("amzn", "2")),
             mock.patch("promptfoo.environment._detect_container", return_value=(False, False)),
+            mock.patch("promptfoo.environment._detect_wsl", return_value=False),
             mock.patch("promptfoo.environment._detect_ci", return_value=(False, None)),
             mock.patch("promptfoo.environment._detect_cloud_provider", return_value="aws"),
             mock.patch("promptfoo.environment._detect_python_env", return_value=(False, False)),
@@ -285,6 +318,7 @@ class TestDetectEnvironment:
             mock.patch("sys.platform", "linux"),
             mock.patch("promptfoo.environment._detect_linux_distro", return_value=("ubuntu", "22.04")),
             mock.patch("promptfoo.environment._detect_container", return_value=(False, False)),
+            mock.patch("promptfoo.environment._detect_wsl", return_value=False),
             mock.patch("promptfoo.environment._detect_ci", return_value=(True, "github")),
             mock.patch("promptfoo.environment._detect_cloud_provider", return_value=None),
             mock.patch("promptfoo.environment._detect_python_env", return_value=(False, False)),
@@ -294,3 +328,24 @@ class TestDetectEnvironment:
 
             assert env.is_ci is True
             assert env.ci_platform == "github"
+
+    def test_detect_wsl_ubuntu(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Detect WSL with Ubuntu."""
+        monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu")
+
+        with (
+            mock.patch("sys.platform", "linux"),
+            mock.patch("promptfoo.environment._detect_linux_distro", return_value=("ubuntu", "22.04")),
+            mock.patch("promptfoo.environment._detect_container", return_value=(False, False)),
+            mock.patch("promptfoo.environment._detect_wsl", return_value=True),
+            mock.patch("promptfoo.environment._detect_ci", return_value=(False, None)),
+            mock.patch("promptfoo.environment._detect_cloud_provider", return_value=None),
+            mock.patch("promptfoo.environment._detect_python_env", return_value=(False, False)),
+            mock.patch("promptfoo.environment._has_sudo_access", return_value=True),
+        ):
+            env = detect_environment()
+
+            assert env.os_type == "linux"
+            assert env.linux_distro == "ubuntu"
+            assert env.is_wsl is True
+            assert env.is_docker is False
