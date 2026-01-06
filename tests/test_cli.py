@@ -12,7 +12,7 @@ This module tests all functionality of the CLI wrapper including:
 import os
 import subprocess
 import sys
-from typing import Any, Optional
+from typing import Optional
 from unittest.mock import MagicMock
 
 import pytest
@@ -33,7 +33,6 @@ from promptfoo.cli import (
     main,
     print_installation_help,
 )
-
 
 # =============================================================================
 # Unit Tests for Helper Functions
@@ -68,15 +67,16 @@ class TestInstallationHelp:
     """Test installation help message output."""
 
     def test_print_installation_help_outputs_to_stderr(self, capsys: pytest.CaptureFixture) -> None:
-        """Installation help is printed to stderr with expected content."""
+        """Installation help is printed to stderr with platform-specific content."""
         print_installation_help()
         captured = capsys.readouterr()
         assert captured.out == ""  # Nothing to stdout
         assert "ERROR: promptfoo requires Node.js" in captured.err
-        assert "brew install node" in captured.err
-        assert "apt install nodejs npm" in captured.err
-        assert "nodejs.org" in captured.err
-        assert "nvm" in captured.err
+        # Platform-specific instructions will vary by environment
+        # Just verify that some installation instructions are present
+        assert "nodejs.org" in captured.err or "install node" in captured.err.lower()
+        assert "DIRECT USAGE" in captured.err  # npx instructions always included
+        assert "npx promptfoo@latest" in captured.err
 
 
 class TestPathUtilities:
@@ -216,10 +216,7 @@ class TestExternalPromptfooDiscovery:
     def test_find_external_promptfoo_when_found(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Returns path when promptfoo found and not this wrapper."""
         promptfoo_path = "/usr/local/bin/promptfoo"
-        monkeypatch.setattr(
-            "shutil.which",
-            lambda cmd, path=None: promptfoo_path if cmd == "promptfoo" else None
-        )
+        monkeypatch.setattr("shutil.which", lambda cmd, path=None: promptfoo_path if cmd == "promptfoo" else None)
         monkeypatch.setattr(sys, "argv", ["different-script"])
         result = _find_external_promptfoo()
         assert result == promptfoo_path
@@ -343,10 +340,10 @@ class TestMainFunction:
     def test_main_uses_external_promptfoo_when_available(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Uses external promptfoo when found and sets wrapper env var."""
         monkeypatch.setattr(sys, "argv", ["promptfoo", "eval"])
-        monkeypatch.setattr("shutil.which", lambda cmd, path=None: {
-            "node": "/usr/bin/node",
-            "promptfoo": "/usr/local/bin/promptfoo"
-        }.get(cmd))
+        monkeypatch.setattr(
+            "shutil.which",
+            lambda cmd, path=None: {"node": "/usr/bin/node", "promptfoo": "/usr/local/bin/promptfoo"}.get(cmd),
+        )
 
         mock_result = subprocess.CompletedProcess([], 0)
         mock_run = MagicMock(return_value=mock_result)
@@ -374,11 +371,14 @@ class TestMainFunction:
         """Skips external promptfoo search when wrapper env var is set."""
         monkeypatch.setattr(sys, "argv", ["promptfoo", "eval"])
         monkeypatch.setenv(_WRAPPER_ENV, "1")
-        monkeypatch.setattr("shutil.which", lambda cmd, path=None: {
-            "node": "/usr/bin/node",
-            "npx": "/usr/bin/npx",
-            "promptfoo": "/usr/local/bin/promptfoo"
-        }.get(cmd))
+        monkeypatch.setattr(
+            "shutil.which",
+            lambda cmd, path=None: {
+                "node": "/usr/bin/node",
+                "npx": "/usr/bin/npx",
+                "promptfoo": "/usr/local/bin/promptfoo",
+            }.get(cmd),
+        )
 
         mock_result = subprocess.CompletedProcess([], 0)
         mock_run = MagicMock(return_value=mock_result)
@@ -399,10 +399,9 @@ class TestMainFunction:
     def test_main_falls_back_to_npx(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Falls back to npx when no external promptfoo found."""
         monkeypatch.setattr(sys, "argv", ["promptfoo", "eval"])
-        monkeypatch.setattr("shutil.which", lambda cmd, path=None: {
-            "node": "/usr/bin/node",
-            "npx": "/usr/bin/npx"
-        }.get(cmd))
+        monkeypatch.setattr(
+            "shutil.which", lambda cmd, path=None: {"node": "/usr/bin/node", "npx": "/usr/bin/npx"}.get(cmd)
+        )
 
         mock_result = subprocess.CompletedProcess([], 0)
         mock_run = MagicMock(return_value=mock_result)
@@ -428,9 +427,7 @@ class TestMainFunction:
     ) -> None:
         """Exits with error when neither external promptfoo nor npx found."""
         monkeypatch.setattr(sys, "argv", ["promptfoo", "eval"])
-        monkeypatch.setattr("shutil.which", lambda cmd, path=None: {
-            "node": "/usr/bin/node"
-        }.get(cmd))
+        monkeypatch.setattr("shutil.which", lambda cmd, path=None: {"node": "/usr/bin/node"}.get(cmd))
 
         with pytest.raises(SystemExit) as exc_info:
             main()
@@ -442,10 +439,9 @@ class TestMainFunction:
     def test_main_passes_arguments_correctly(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Passes command-line arguments to the subprocess."""
         monkeypatch.setattr(sys, "argv", ["promptfoo", "redteam", "run", "--config", "test.yaml"])
-        monkeypatch.setattr("shutil.which", lambda cmd, path=None: {
-            "node": "/usr/bin/node",
-            "npx": "/usr/bin/npx"
-        }.get(cmd))
+        monkeypatch.setattr(
+            "shutil.which", lambda cmd, path=None: {"node": "/usr/bin/node", "npx": "/usr/bin/npx"}.get(cmd)
+        )
 
         mock_result = subprocess.CompletedProcess([], 0)
         mock_run = MagicMock(return_value=mock_result)
@@ -465,10 +461,9 @@ class TestMainFunction:
     def test_main_returns_subprocess_exit_code(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Returns the exit code from the subprocess."""
         monkeypatch.setattr(sys, "argv", ["promptfoo", "eval"])
-        monkeypatch.setattr("shutil.which", lambda cmd, path=None: {
-            "node": "/usr/bin/node",
-            "npx": "/usr/bin/npx"
-        }.get(cmd))
+        monkeypatch.setattr(
+            "shutil.which", lambda cmd, path=None: {"node": "/usr/bin/node", "npx": "/usr/bin/npx"}.get(cmd)
+        )
 
         # Test non-zero exit code
         mock_result = subprocess.CompletedProcess([], 42)
