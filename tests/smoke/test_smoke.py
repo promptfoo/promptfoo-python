@@ -61,8 +61,8 @@ def run_promptfoo(
         timeout=120,  # Increased timeout for npx fallback (first npx call downloads promptfoo)
     )
 
-    stdout = result.stdout
-    stderr = result.stderr
+    stdout = result.stdout or ""
+    stderr = result.stderr or ""
     exit_code = result.returncode
 
     if not expect_error and exit_code != 0:
