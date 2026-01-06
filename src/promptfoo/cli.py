@@ -42,6 +42,21 @@ def _normalize_path(path: str) -> str:
     return os.path.normcase(os.path.abspath(path))
 
 
+def _strip_quotes(path: str) -> str:
+    if len(path) >= 2 and path[0] == path[-1] and path[0] in ('"', "'"):
+        return path[1:-1]
+    return path
+
+
+def _split_path(path_value: str) -> list[str]:
+    entries = []
+    for entry in path_value.split(os.pathsep):
+        entry = _strip_quotes(entry.strip())
+        if entry:
+            entries.append(entry)
+    return entries
+
+
 def _resolve_argv0() -> Optional[str]:
     if not sys.argv:
         return None
@@ -56,21 +71,51 @@ def _resolve_argv0() -> Optional[str]:
     return None
 
 
+def _find_windows_promptfoo() -> Optional[str]:
+    candidates = []
+    for key in ("NPM_CONFIG_PREFIX", "npm_config_prefix"):
+        prefix = os.environ.get(key)
+        if prefix:
+            candidates.append(prefix)
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        candidates.append(os.path.join(appdata, "npm"))
+    localappdata = os.environ.get("LOCALAPPDATA")
+    if localappdata:
+        candidates.append(os.path.join(localappdata, "npm"))
+    for env_key in ("ProgramFiles", "ProgramFiles(x86)"):
+        program_files = os.environ.get(env_key)
+        if program_files:
+            candidates.append(os.path.join(program_files, "nodejs"))
+    for base in candidates:
+        for name in ("promptfoo.cmd", "promptfoo.exe"):
+            candidate = os.path.join(base, name)
+            if os.path.isfile(candidate):
+                return candidate
+    return None
+
+
 def _find_external_promptfoo() -> Optional[str]:
     promptfoo_path = shutil.which("promptfoo")
     if not promptfoo_path:
+        if os.name == "nt":
+            return _find_windows_promptfoo()
         return None
     argv0_path = _resolve_argv0()
     if argv0_path and _normalize_path(promptfoo_path) == argv0_path:
         wrapper_dir = _normalize_path(os.path.dirname(promptfoo_path))
         path_entries = [
             entry
-            for entry in os.environ.get("PATH", "").split(os.pathsep)
-            if entry and _normalize_path(entry) != wrapper_dir
+            for entry in _split_path(os.environ.get("PATH", ""))
+            if _normalize_path(entry) != wrapper_dir
         ]
-        if not path_entries:
-            return None
-        return shutil.which("promptfoo", path=os.pathsep.join(path_entries))
+        if path_entries:
+            candidate = shutil.which("promptfoo", path=os.pathsep.join(path_entries))
+            if candidate:
+                return candidate
+        if os.name == "nt":
+            return _find_windows_promptfoo()
+        return None
     return promptfoo_path
 
 
