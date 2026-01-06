@@ -101,8 +101,21 @@ def _find_external_promptfoo() -> Optional[str]:
         if os.name == "nt":
             return _find_windows_promptfoo()
         return None
+
     argv0_path = _resolve_argv0()
-    if argv0_path and _normalize_path(promptfoo_path) == argv0_path:
+    promptfoo_path_norm = _normalize_path(promptfoo_path)
+    is_self = False
+
+    if argv0_path and promptfoo_path_norm == argv0_path:
+        is_self = True
+    elif sys.prefix != sys.base_prefix:
+        # Running in a virtual environment. Check if the found executable is in the same
+        # directory as the Python interpreter. This detects shims (e.g. Windows .exe, uv)
+        # where argv0 points to the script but shutil.which finds the shim.
+        if os.path.dirname(promptfoo_path_norm) == os.path.dirname(_normalize_path(sys.executable)):
+            is_self = True
+
+    if is_self:
         wrapper_dir = _normalize_path(os.path.dirname(promptfoo_path))
         path_entries = [
             entry for entry in _split_path(os.environ.get("PATH", "")) if _normalize_path(entry) != wrapper_dir
