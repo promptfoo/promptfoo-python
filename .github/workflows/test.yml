@@ -79,30 +79,45 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Configure npm cache on Windows
+      - name: Configure npm on Windows
         if: matrix.os == 'windows-latest'
+        shell: pwsh
         run: |
-          "NPM_CONFIG_CACHE=$env:RUNNER_TEMP\\npm-cache" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          # Configure cache location (applies immediately to this step)
+          $cacheDir = Join-Path $env:RUNNER_TEMP "npm-cache"
+          New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+          npm config set cache $cacheDir --location=user
+
+          # Configure prefix location (applies immediately to this step)
+          $globalPrefix = npm config get prefix
+          if (-not $globalPrefix -or $globalPrefix -eq "undefined") {
+            $globalPrefix = Join-Path $env:APPDATA "npm"
+          }
+          $globalPrefix = $globalPrefix.Trim()
+          npm config set prefix $globalPrefix --location=user
+
+          # NOW clean and verify cache (cleans the correctly-configured cache)
           npm cache clean --force
+          npm cache verify
+
+          # Export settings for future steps
+          "NPM_CONFIG_CACHE=$cacheDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "NPM_CONFIG_PREFIX=$globalPrefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "npm_config_prefix=$globalPrefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          # Add global bin directories to PATH
+          $binPaths = @($globalPrefix, (Join-Path $globalPrefix "bin")) | Where-Object { Test-Path $_ }
+          foreach ($binPath in $binPaths) {
+            $binPath | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
+
+          Write-Host "npm cache: $cacheDir"
+          Write-Host "npm prefix: $globalPrefix"
 
       - name: Install promptfoo globally
         run: npm install -g promptfoo@latest
         env:
           NODE_OPTIONS: --max-old-space-size=4096
-
-      - name: Add npm global bin to PATH (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          $globalPrefix = (npm config get prefix).Trim()
-          if (-not $globalPrefix) {
-            $globalPrefix = Join-Path $env:APPDATA "npm"
-          }
-          "NPM_CONFIG_PREFIX=$globalPrefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "npm_config_prefix=$globalPrefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          $binPaths = @($globalPrefix, (Join-Path $globalPrefix "bin")) | Where-Object { Test-Path $_ }
-          foreach ($binPath in $binPaths) {
-            $binPath | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          }
 
       - uses: astral-sh/setup-uv@v7
         with:
@@ -138,11 +153,34 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Configure npm cache on Windows
+      - name: Configure npm on Windows
         if: matrix.os == 'windows-latest'
+        shell: pwsh
         run: |
-          "NPM_CONFIG_CACHE=$env:RUNNER_TEMP\\npm-cache" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          # Configure cache location (applies immediately to this step)
+          $cacheDir = Join-Path $env:RUNNER_TEMP "npm-cache"
+          New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+          npm config set cache $cacheDir --location=user
+
+          # Configure prefix location (applies immediately to this step)
+          $globalPrefix = npm config get prefix
+          if (-not $globalPrefix -or $globalPrefix -eq "undefined") {
+            $globalPrefix = Join-Path $env:APPDATA "npm"
+          }
+          $globalPrefix = $globalPrefix.Trim()
+          npm config set prefix $globalPrefix --location=user
+
+          # NOW clean and verify cache (cleans the correctly-configured cache)
           npm cache clean --force
+          npm cache verify
+
+          # Export settings for future steps
+          "NPM_CONFIG_CACHE=$cacheDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "NPM_CONFIG_PREFIX=$globalPrefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "npm_config_prefix=$globalPrefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          Write-Host "npm cache: $cacheDir"
+          Write-Host "npm prefix: $globalPrefix"
 
       # Intentionally skip installing promptfoo globally
       # This tests the npx fallback path
