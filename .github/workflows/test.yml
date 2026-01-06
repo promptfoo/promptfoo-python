@@ -90,6 +90,12 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=4096
 
+      - name: Add npm global bin to PATH (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          $globalBin = npm bin -g
+          $globalBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
