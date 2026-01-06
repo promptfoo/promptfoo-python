@@ -58,7 +58,7 @@ def run_promptfoo(
         capture_output=True,
         text=True,
         env=full_env,
-        timeout=60,  # Eval can take longer
+        timeout=120,  # Increased timeout for npx fallback (first npx call downloads promptfoo)
     )
 
     stdout = result.stdout
