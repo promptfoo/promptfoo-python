@@ -39,16 +39,19 @@ def print_installation_help() -> None:
 
 
 def _normalize_path(path: str) -> str:
+    """Normalize a path for safe comparison."""
     return os.path.normcase(os.path.abspath(path))
 
 
 def _strip_quotes(path: str) -> str:
+    """Strip surrounding quotes from a path string."""
     if len(path) >= 2 and path[0] == path[-1] and path[0] in ('"', "'"):
         return path[1:-1]
     return path
 
 
 def _split_path(path_value: str) -> list[str]:
+    """Split a PATH string into a list of directories."""
     entries = []
     for entry in path_value.split(os.pathsep):
         entry = _strip_quotes(entry.strip())
@@ -58,6 +61,7 @@ def _split_path(path_value: str) -> list[str]:
 
 
 def _resolve_argv0() -> Optional[str]:
+    """Resolve the absolute path of the current script (argv[0])."""
     if not sys.argv:
         return None
     argv0 = sys.argv[0]
@@ -72,52 +76,90 @@ def _resolve_argv0() -> Optional[str]:
 
 
 def _find_windows_promptfoo() -> Optional[str]:
-    candidates = []
+    """
+    Search for promptfoo in standard Windows installation locations.
+    Useful when not in PATH.
+    """
+    search_dirs = []
+
+    # Check npm config env vars
     for key in ("NPM_CONFIG_PREFIX", "npm_config_prefix"):
-        prefix = os.environ.get(key)
-        if prefix:
-            candidates.append(prefix)
-    appdata = os.environ.get("APPDATA")
-    if appdata:
-        candidates.append(os.path.join(appdata, "npm"))
-    localappdata = os.environ.get("LOCALAPPDATA")
-    if localappdata:
-        candidates.append(os.path.join(localappdata, "npm"))
+        if prefix := os.environ.get(key):
+            search_dirs.append(prefix)
+
+    # Check standard npm folders
+    if appdata := os.environ.get("APPDATA"):
+        search_dirs.append(os.path.join(appdata, "npm"))
+    if localappdata := os.environ.get("LOCALAPPDATA"):
+        search_dirs.append(os.path.join(localappdata, "npm"))
+
+    # Check Program Files
     for env_key in ("ProgramFiles", "ProgramFiles(x86)"):
-        program_files = os.environ.get(env_key)
-        if program_files:
-            candidates.append(os.path.join(program_files, "nodejs"))
-    for base in candidates:
+        if program_files := os.environ.get(env_key):
+            search_dirs.append(os.path.join(program_files, "nodejs"))
+
+    for base_dir in search_dirs:
         for name in ("promptfoo.cmd", "promptfoo.exe"):
-            candidate = os.path.join(base, name)
+            candidate = os.path.join(base_dir, name)
             if os.path.isfile(candidate):
                 return candidate
     return None
 
 
-def _find_external_promptfoo() -> Optional[str]:
-    promptfoo_path = shutil.which("promptfoo")
-    if not promptfoo_path:
-        if os.name == "nt":
-            return _find_windows_promptfoo()
-        return None
+def _is_executing_wrapper(found_path: str) -> bool:
+    """
+    Detect if the found executable is actually this wrapper script.
+
+    This handles cases where the wrapper is installed in the same bin/ directory
+    as the target or if we are inside a virtual environment.
+    """
     argv0_path = _resolve_argv0()
-    if argv0_path and _normalize_path(promptfoo_path) == argv0_path:
-        wrapper_dir = _normalize_path(os.path.dirname(promptfoo_path))
-        path_entries = [
-            entry for entry in _split_path(os.environ.get("PATH", "")) if _normalize_path(entry) != wrapper_dir
-        ]
-        if path_entries:
-            candidate = shutil.which("promptfoo", path=os.pathsep.join(path_entries))
-            if candidate:
-                return candidate
+    found_norm = _normalize_path(found_path)
+
+    # direct argv0 match
+    if argv0_path and found_norm == argv0_path:
+        return True
+
+    # venv detection (shim check)
+    return sys.prefix != sys.base_prefix and os.path.dirname(found_norm) == os.path.dirname(
+        _normalize_path(sys.executable)
+    )
+
+
+def _search_path_excluding(exclude_dir: str) -> Optional[str]:
+    """Search PATH for promptfoo, excluding the specified directory."""
+    path_entries = [entry for entry in _split_path(os.environ.get("PATH", "")) if _normalize_path(entry) != exclude_dir]
+    if not path_entries:
+        return None
+    return shutil.which("promptfoo", path=os.pathsep.join(path_entries))
+
+
+def _find_external_promptfoo() -> Optional[str]:
+    """Find the external promptfoo executable, avoiding the wrapper itself."""
+    # 1. First naive search
+    candidate = shutil.which("promptfoo")
+
+    # 2. If not found, try explicit Windows paths
+    if not candidate:
         if os.name == "nt":
             return _find_windows_promptfoo()
         return None
-    return promptfoo_path
+
+    # 3. If found, check if it's us (the wrapper)
+    if _is_executing_wrapper(candidate):
+        wrapper_dir = _normalize_path(os.path.dirname(candidate))
+        # Search again excluding our directory
+        candidate = _search_path_excluding(wrapper_dir)
+
+        # If still not found, try Windows fallback
+        if not candidate and os.name == "nt":
+            return _find_windows_promptfoo()
+
+    return candidate
 
 
 def _requires_shell(executable: str) -> bool:
+    """Check if the executable requires a shell to run (Windows only)."""
     if os.name != "nt":
         return False
     _, ext = os.path.splitext(executable)
@@ -125,6 +167,7 @@ def _requires_shell(executable: str) -> bool:
 
 
 def _run_command(cmd: list[str], env: Optional[dict[str, str]] = None) -> subprocess.CompletedProcess:
+    """Execute a command, handling shell requirements on Windows."""
     if _requires_shell(cmd[0]):
         return subprocess.run(subprocess.list2cmdline(cmd), shell=True, env=env)
     return subprocess.run(cmd, env=env)
