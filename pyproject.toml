@@ -45,6 +45,23 @@ Repository = "https://github.com/promptfoo/promptfoo-python"
 Homepage = "https://www.promptfoo.dev"
 Documentation = "https://www.promptfoo.dev/docs"
 
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/.github",
+    "/.gitignore",
+    "/.release-please-manifest.json",
+    "/release-please-config.json",
+    "/renovate.json",
+    "/uv.lock",
+    "/tests",
+    "/CHANGELOG.md",
+    "/AGENTS.md",
+    "/CLAUDE.md",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/promptfoo"]
+
 [tool.ruff]
 line-length = 120
 target-version = "py39"
