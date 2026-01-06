@@ -97,8 +97,12 @@ jobs:
           if (-not $globalPrefix) {
             $globalPrefix = Join-Path $env:APPDATA "npm"
           }
-          $globalBin = $globalPrefix
-          $globalBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "NPM_CONFIG_PREFIX=$globalPrefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "npm_config_prefix=$globalPrefix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $binPaths = @($globalPrefix, (Join-Path $globalPrefix "bin")) | Where-Object { Test-Path $_ }
+          foreach ($binPath in $binPaths) {
+            $binPath | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
 
       - uses: astral-sh/setup-uv@v7
         with:
