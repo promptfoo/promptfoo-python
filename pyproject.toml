@@ -102,3 +102,16 @@ show_error_codes = true
 pretty = true
 check_untyped_defs = true
 disallow_incomplete_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+]
+markers = [
+    "smoke: smoke tests that run the full CLI (slow, requires Node.js)",
+]

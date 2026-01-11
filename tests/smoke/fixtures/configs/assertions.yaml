@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: 'Smoke test - multiple assertions'
+
+providers:
+  - echo
+
+prompts:
+  - 'Hello {{name}}, welcome to {{place}}'
+
+tests:
+  - vars:
+      name: Alice
+      place: Wonderland
+    assert:
+      - type: contains
+        value: Hello
+      - type: contains
+        value: Alice
+      - type: contains
+        value: Wonderland
+      - type: icontains
+        value: WELCOME
