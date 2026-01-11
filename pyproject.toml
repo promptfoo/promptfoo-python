@@ -37,6 +37,7 @@ dependencies = [
 dev = [
     "pytest>=8.4.0",
     "mypy>=1.16.0",
+    "pyright>=1.1.400",
     "ruff>=0.12.0",
     "types-pyyaml>=6.0.0",
 ]
@@ -92,16 +93,64 @@ quote-style = "double"
 
 [tool.mypy]
 python_version = "3.9"
-warn_return_any = true
-warn_unused_configs = true
-warn_redundant_casts = true
+# Enable strict mode for comprehensive type checking
+strict = true
+# Additional strictness beyond --strict
 warn_unreachable = true
-no_implicit_optional = true
-strict_equality = true
+enable_error_code = [
+    "ignore-without-code",
+    "redundant-cast",
+    "truthy-bool",
+    "truthy-iterable",
+    "unused-awaitable",
+]
+# Output formatting
 show_error_codes = true
+show_column_numbers = true
 pretty = true
-check_untyped_defs = true
-disallow_incomplete_defs = true
+# Error handling
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = "posthog.*"
+ignore_missing_imports = true
+
+[tool.pyright]
+pythonVersion = "3.9"
+pythonPlatform = "All"
+typeCheckingMode = "strict"
+include = ["src/promptfoo"]
+exclude = ["tests", "**/__pycache__"]
+# Report all errors in strict mode
+reportMissingImports = true
+reportMissingTypeStubs = false  # Disable for posthog which lacks full stubs
+reportUnusedImport = true
+reportUnusedClass = true
+reportUnusedFunction = true
+reportUnusedVariable = true
+reportDuplicateImport = true
+reportPrivateUsage = true
+reportConstantRedefinition = true
+reportIncompatibleMethodOverride = true
+reportIncompatibleVariableOverride = true
+reportInconsistentConstructor = true
+reportOverlappingOverload = true
+reportUninitializedInstanceVariable = true
+reportCallInDefaultInitializer = true
+reportUnnecessaryIsInstance = true
+reportUnnecessaryCast = true
+reportUnnecessaryComparison = true
+reportUnnecessaryContains = true
+reportImplicitStringConcatenation = false
+reportUnusedCallResult = false
+reportUnusedExpression = true
+reportUnnecessaryTypeIgnoreComment = false  # Allow type: ignore for mypy compatibility
+reportMatchNotExhaustive = true
+# Relax some strict checks for third-party libraries without full stubs
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportUnknownVariableType = false
+reportUnknownParameterType = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

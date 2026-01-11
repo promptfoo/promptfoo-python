@@ -165,7 +165,7 @@ def _requires_shell(executable: str) -> bool:
     return ext.lower() in _WINDOWS_SHELL_EXTENSIONS
 
 
-def _run_command(cmd: list[str], env: Optional[dict[str, str]] = None) -> subprocess.CompletedProcess:
+def _run_command(cmd: list[str], env: Optional[dict[str, str]] = None) -> subprocess.CompletedProcess[bytes]:
     """Execute a command, handling shell requirements on Windows."""
     if _requires_shell(cmd[0]):
         return subprocess.run(subprocess.list2cmdline(cmd), shell=True, env=env)
