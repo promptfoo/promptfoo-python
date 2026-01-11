@@ -12,7 +12,7 @@ Usage:
 For full documentation, visit: https://www.promptfoo.dev/docs
 """
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 __all__ = ["__version__", "main"]
 
 from .cli import main
