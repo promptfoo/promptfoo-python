@@ -473,6 +473,9 @@ class TestMainFunction:
 
         monkeypatch.setattr(sys, "argv", ["promptfoo", "eval"])
         monkeypatch.setattr("shutil.which", lambda cmd, path=None: {"node": node_path}.get(cmd))
+        # Also mock os.path.isfile to prevent _find_windows_promptfoo() from finding
+        # a real promptfoo installation on Windows CI runners
+        monkeypatch.setattr(os.path, "isfile", lambda p: False)
 
         with pytest.raises(SystemExit) as exc_info:
             main()

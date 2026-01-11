@@ -33,6 +33,7 @@ def run_promptfoo(
     cwd: Optional[Path] = None,
     expect_error: bool = False,
     env: Optional[dict[str, str]] = None,
+    timeout: int = 120,
 ) -> tuple[str, str, int]:
     """
     Run promptfoo CLI and capture output.
@@ -42,6 +43,7 @@ def run_promptfoo(
         cwd: Working directory for the command
         expect_error: If True, don't raise on non-zero exit
         env: Environment variables to set
+        timeout: Timeout in seconds (default 120)
 
     Returns:
         Tuple of (stdout, stderr, exit_code)
@@ -59,7 +61,11 @@ def run_promptfoo(
         capture_output=True,
         text=True,
         env=full_env,
-        timeout=120,  # Increased timeout for npx fallback (first npx call downloads promptfoo)
+        timeout=timeout,
+        # Use UTF-8 encoding with error replacement to handle Windows encoding issues
+        # Windows default cp1252 can't decode some bytes in npx/promptfoo output
+        encoding="utf-8",
+        errors="replace",
     )
 
     stdout = result.stdout or ""
@@ -83,6 +89,33 @@ def setup_and_teardown() -> Generator[None, None, None]:
     yield
     if OUTPUT_DIR.exists():
         shutil.rmtree(OUTPUT_DIR)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def warmup_npx() -> Generator[None, None, None]:
+    """
+    Warm up npx by running promptfoo --version before all tests.
+
+    On npx fallback (when promptfoo isn't globally installed), the first npx call
+    downloads and caches promptfoo, which can take several minutes on Windows.
+    Running this warmup prevents the first actual test from timing out.
+    """
+    # Run with a longer timeout (5 minutes) for the initial npx download
+    try:
+        subprocess.run(
+            ["promptfoo", "--version"],
+            capture_output=True,
+            timeout=300,  # 5 minutes for initial npx download
+            encoding="utf-8",
+            errors="replace",
+        )
+    except subprocess.TimeoutExpired:
+        # If warmup times out, tests will likely fail but let them run anyway
+        pass
+    except FileNotFoundError:
+        # promptfoo not installed, tests will fail but let them try
+        pass
+    yield
 
 
 class TestBasicCLI:
