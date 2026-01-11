@@ -11,6 +11,8 @@ import subprocess
 import sys
 from typing import NoReturn, Optional
 
+from .telemetry import record_wrapper_used
+
 _WRAPPER_ENV = "PROMPTFOO_PY_WRAPPER"
 _WINDOWS_SHELL_EXTENSIONS = (".bat", ".cmd")
 
@@ -184,6 +186,7 @@ def main() -> NoReturn:
     # Build command: try external promptfoo first, fall back to npx
     promptfoo_path = None if os.environ.get(_WRAPPER_ENV) else _find_external_promptfoo()
     if promptfoo_path:
+        record_wrapper_used("global")
         cmd = [promptfoo_path] + sys.argv[1:]
         env = os.environ.copy()
         env[_WRAPPER_ENV] = "1"
@@ -191,9 +194,11 @@ def main() -> NoReturn:
     else:
         npx_path = shutil.which("npx")
         if npx_path:
+            record_wrapper_used("npx")
             cmd = [npx_path, "-y", "promptfoo@latest"] + sys.argv[1:]
             result = _run_command(cmd)
         else:
+            record_wrapper_used("error")
             print("ERROR: Neither promptfoo nor npx is available.", file=sys.stderr)
             print("Please install promptfoo: npm install -g promptfoo", file=sys.stderr)
             print("Or ensure Node.js is properly installed.", file=sys.stderr)
