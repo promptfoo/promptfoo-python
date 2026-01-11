@@ -18,7 +18,13 @@ from posthog import Posthog
 
 from . import __version__
 
-# PostHog configuration - same as the main promptfoo TypeScript project
+# PostHog configuration - same as the main promptfoo TypeScript project.
+# NOTE: This is an intentionally public PostHog project API key:
+# - Safe to commit to source control (client-side telemetry key)
+# - Only allows sending anonymous usage events to the promptfoo PostHog project
+# - Does not grant administrative access to the PostHog account
+# - Abuse is mitigated by PostHog's built-in rate limiting
+# - Telemetry can be disabled via PROMPTFOO_DISABLE_TELEMETRY=1
 _POSTHOG_HOST = "https://a.promptfoo.app"
 _POSTHOG_KEY = "phc_E5n5uHnDo2eREJL1uqX1cIlbkoRby4yFWt3V94HqRRg"
 
