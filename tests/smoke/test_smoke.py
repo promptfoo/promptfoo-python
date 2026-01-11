@@ -150,9 +150,7 @@ class TestEvalCommand:
     def test_basic_eval(self):
         """Test basic eval with echo provider."""
         config_path = CONFIGS_DIR / "basic.yaml"
-        stdout, stderr, exit_code = run_promptfoo(
-            ["eval", "-c", str(config_path), "--no-cache"]
-        )
+        stdout, stderr, exit_code = run_promptfoo(["eval", "-c", str(config_path), "--no-cache"])
 
         assert exit_code == 0, f"Eval failed:\nSTDOUT: {stdout}\nSTDERR: {stderr}"
         # Should show evaluation results
@@ -267,9 +265,7 @@ class TestEvalCommand:
         """Test --verbose flag."""
         config_path = CONFIGS_DIR / "basic.yaml"
 
-        stdout, stderr, exit_code = run_promptfoo(
-            ["eval", "-c", str(config_path), "--verbose", "--no-cache"]
-        )
+        stdout, stderr, exit_code = run_promptfoo(["eval", "-c", str(config_path), "--verbose", "--no-cache"])
 
         assert exit_code == 0
         # Verbose mode should produce output
@@ -283,9 +279,7 @@ class TestExitCodes:
         """Test exit code 0 when all assertions pass."""
         config_path = CONFIGS_DIR / "basic.yaml"
 
-        stdout, stderr, exit_code = run_promptfoo(
-            ["eval", "-c", str(config_path), "--no-cache"]
-        )
+        stdout, stderr, exit_code = run_promptfoo(["eval", "-c", str(config_path), "--no-cache"])
 
         assert exit_code == 0
 
@@ -365,9 +359,7 @@ class TestAssertions:
         """Test contains assertion."""
         config_path = CONFIGS_DIR / "basic.yaml"
 
-        stdout, stderr, exit_code = run_promptfoo(
-            ["eval", "-c", str(config_path), "--no-cache"]
-        )
+        stdout, stderr, exit_code = run_promptfoo(["eval", "-c", str(config_path), "--no-cache"])
 
         assert exit_code == 0
         # All assertions should pass
@@ -377,9 +369,7 @@ class TestAssertions:
         """Test multiple assertions in single test."""
         config_path = CONFIGS_DIR / "assertions.yaml"
 
-        stdout, stderr, exit_code = run_promptfoo(
-            ["eval", "-c", str(config_path), "--no-cache"]
-        )
+        stdout, stderr, exit_code = run_promptfoo(["eval", "-c", str(config_path), "--no-cache"])
 
         assert exit_code == 0
 

@@ -268,7 +268,8 @@ class TestExternalPromptfooDiscovery:
         real_promptfoo = "C:\\npm\\prefix\\promptfoo.cmd"
 
         monkeypatch.setattr(sys, "argv", [wrapper_path])
-        monkeypatch.setenv("PATH", "C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python312\\Scripts;C:\\npm\\prefix")
+        test_path = "C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python312\\Scripts;C:\\npm\\prefix"
+        monkeypatch.setenv("PATH", test_path)
 
         def mock_which(cmd: str, path: Optional[str] = None) -> Optional[str]:
             if cmd != "promptfoo":
@@ -471,9 +472,7 @@ class TestMainFunction:
         node_path = "C:\\Program Files\\nodejs\\node.exe" if sys.platform == "win32" else "/usr/bin/node"
 
         monkeypatch.setattr(sys, "argv", ["promptfoo", "eval"])
-        monkeypatch.setattr("shutil.which", lambda cmd, path=None: {
-            "node": node_path
-        }.get(cmd))
+        monkeypatch.setattr("shutil.which", lambda cmd, path=None: {"node": node_path}.get(cmd))
 
         with pytest.raises(SystemExit) as exc_info:
             main()
