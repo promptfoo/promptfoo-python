@@ -172,8 +172,8 @@ class _Telemetry:
         """Shutdown the telemetry client and flush any pending events."""
         if self._client:
             try:
-                self._client.flush()
-                self._client.shutdown()
+                self._client.flush()  # type: ignore[no-untyped-call]
+                self._client.shutdown()  # type: ignore[no-untyped-call]
             except Exception:
                 pass  # Silently fail
             finally:

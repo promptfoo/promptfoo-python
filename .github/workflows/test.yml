@@ -42,9 +42,12 @@ jobs:
         run: uv run ruff format --check src/
 
   type-check:
-    name: Type Check
+    name: Type Check (${{ matrix.type-checker }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      matrix:
+        type-checker: [mypy, pyright]
     steps:
       - uses: actions/checkout@v6
 
@@ -59,7 +62,12 @@ jobs:
         run: uv sync --extra dev
 
       - name: Type check with mypy
+        if: matrix.type-checker == 'mypy'
         run: uv run mypy src/promptfoo/
+
+      - name: Type check with pyright
+        if: matrix.type-checker == 'pyright'
+        run: uv run pyright src/promptfoo/
 
   test:
     name: Test (py${{ matrix.python-version }}, ${{ matrix.os }})
