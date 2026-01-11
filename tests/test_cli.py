@@ -386,6 +386,8 @@ class TestMainFunction:
             "shutil.which",
             lambda cmd, path=None: {"node": "/usr/bin/node", "promptfoo": "/usr/local/bin/promptfoo"}.get(cmd),
         )
+        # Mock telemetry to avoid PostHog calls during test
+        monkeypatch.setattr("promptfoo.cli.record_wrapper_used", lambda mode: None)
 
         mock_result = subprocess.CompletedProcess([], 0)
         mock_run = MagicMock(return_value=mock_result)
@@ -421,6 +423,8 @@ class TestMainFunction:
                 "promptfoo": "/usr/local/bin/promptfoo",
             }.get(cmd),
         )
+        # Mock telemetry to avoid PostHog calls during test
+        monkeypatch.setattr("promptfoo.cli.record_wrapper_used", lambda mode: None)
 
         mock_result = subprocess.CompletedProcess([], 0)
         mock_run = MagicMock(return_value=mock_result)
@@ -444,6 +448,8 @@ class TestMainFunction:
         monkeypatch.setattr(
             "shutil.which", lambda cmd, path=None: {"node": "/usr/bin/node", "npx": "/usr/bin/npx"}.get(cmd)
         )
+        # Mock telemetry to avoid PostHog calls during test
+        monkeypatch.setattr("promptfoo.cli.record_wrapper_used", lambda mode: None)
 
         mock_result = subprocess.CompletedProcess([], 0)
         mock_run = MagicMock(return_value=mock_result)
@@ -490,6 +496,8 @@ class TestMainFunction:
         monkeypatch.setattr(
             "shutil.which", lambda cmd, path=None: {"node": "/usr/bin/node", "npx": "/usr/bin/npx"}.get(cmd)
         )
+        # Mock telemetry to avoid PostHog calls during test
+        monkeypatch.setattr("promptfoo.cli.record_wrapper_used", lambda mode: None)
 
         mock_result = subprocess.CompletedProcess([], 0)
         mock_run = MagicMock(return_value=mock_result)
@@ -512,6 +520,8 @@ class TestMainFunction:
         monkeypatch.setattr(
             "shutil.which", lambda cmd, path=None: {"node": "/usr/bin/node", "npx": "/usr/bin/npx"}.get(cmd)
         )
+        # Mock telemetry to avoid PostHog calls during test
+        monkeypatch.setattr("promptfoo.cli.record_wrapper_used", lambda mode: None)
 
         # Test non-zero exit code
         mock_result = subprocess.CompletedProcess([], 42)
