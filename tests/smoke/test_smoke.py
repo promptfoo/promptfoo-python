@@ -4,14 +4,15 @@ Smoke tests for the promptfoo CLI.
 These tests verify the core evaluation pipeline works correctly
 using the echo provider (no external API dependencies).
 
-These tests run against the installed promptfoo package via npx,
-testing the Python wrapper integration.
+These tests run against the installed promptfoo package via the Python wrapper
+(using either a globally installed promptfoo CLI or falling back to npx).
 """
 
 import json
 import os
 import shutil
 import subprocess
+from collections.abc import Generator
 from pathlib import Path
 from typing import Optional
 
@@ -76,7 +77,7 @@ def run_promptfoo(
 
 
 @pytest.fixture(scope="module", autouse=True)
-def setup_and_teardown():
+def setup_and_teardown() -> Generator[None, None, None]:
     """Create and cleanup output directory for smoke tests."""
     OUTPUT_DIR.mkdir(exist_ok=True)
     yield
@@ -87,7 +88,7 @@ def setup_and_teardown():
 class TestBasicCLI:
     """Basic CLI operations smoke tests."""
 
-    def test_version_flag(self):
+    def test_version_flag(self) -> None:
         """Test --version flag outputs version."""
         stdout, stderr, exit_code = run_promptfoo(["--version"])
 
@@ -95,7 +96,7 @@ class TestBasicCLI:
         # Should output a version number (semver format)
         assert stdout.strip(), "Version output should not be empty"
 
-    def test_help_flag(self):
+    def test_help_flag(self) -> None:
         """Test --help flag outputs help."""
         stdout, stderr, exit_code = run_promptfoo(["--help"])
 
@@ -103,7 +104,7 @@ class TestBasicCLI:
         assert "promptfoo" in stdout.lower()
         assert "eval" in stdout.lower()
 
-    def test_eval_help(self):
+    def test_eval_help(self) -> None:
         """Test 'eval --help' outputs eval command help."""
         stdout, stderr, exit_code = run_promptfoo(["eval", "--help"])
 
@@ -111,7 +112,7 @@ class TestBasicCLI:
         assert "--config" in stdout or "-c" in stdout
         assert "--output" in stdout or "-o" in stdout
 
-    def test_unknown_command(self):
+    def test_unknown_command(self) -> None:
         """Test unknown command returns error."""
         stdout, stderr, exit_code = run_promptfoo(
             ["unknowncommand123"],
@@ -122,7 +123,7 @@ class TestBasicCLI:
         output = stdout + stderr
         assert "unknown" in output.lower() or "not found" in output.lower()
 
-    def test_missing_config_file(self):
+    def test_missing_config_file(self) -> None:
         """Test missing config file returns error."""
         stdout, stderr, exit_code = run_promptfoo(
             ["eval", "-c", "nonexistent-config-file.yaml"],
@@ -147,7 +148,7 @@ class TestBasicCLI:
 class TestEvalCommand:
     """Eval command smoke tests."""
 
-    def test_basic_eval(self):
+    def test_basic_eval(self) -> None:
         """Test basic eval with echo provider."""
         config_path = CONFIGS_DIR / "basic.yaml"
         stdout, stderr, exit_code = run_promptfoo(["eval", "-c", str(config_path), "--no-cache"])
@@ -156,7 +157,7 @@ class TestEvalCommand:
         # Should show evaluation results
         assert "pass" in stdout.lower() or "✓" in stdout or "success" in stdout.lower()
 
-    def test_json_output(self):
+    def test_json_output(self) -> None:
         """Test eval outputs valid JSON."""
         config_path = CONFIGS_DIR / "basic.yaml"
         output_path = OUTPUT_DIR / "output.json"
@@ -185,7 +186,7 @@ class TestEvalCommand:
         assert "Hello" in output_text
         assert "World" in output_text
 
-    def test_yaml_output(self):
+    def test_yaml_output(self) -> None:
         """Test eval outputs YAML format."""
         config_path = CONFIGS_DIR / "basic.yaml"
         output_path = OUTPUT_DIR / "output.yaml"
@@ -203,7 +204,7 @@ class TestEvalCommand:
 
         assert "results:" in content
 
-    def test_csv_output(self):
+    def test_csv_output(self) -> None:
         """Test eval outputs CSV format."""
         config_path = CONFIGS_DIR / "basic.yaml"
         output_path = OUTPUT_DIR / "output.csv"
@@ -224,7 +225,7 @@ class TestEvalCommand:
         # CSV should have comma-separated values
         assert "," in lines[0]
 
-    def test_max_concurrency_flag(self):
+    def test_max_concurrency_flag(self) -> None:
         """Test --max-concurrency flag."""
         config_path = CONFIGS_DIR / "basic.yaml"
 
@@ -234,7 +235,7 @@ class TestEvalCommand:
 
         assert exit_code == 0
 
-    def test_repeat_flag(self):
+    def test_repeat_flag(self) -> None:
         """Test --repeat flag runs tests multiple times."""
         config_path = CONFIGS_DIR / "basic.yaml"
         output_path = OUTPUT_DIR / "repeat-output.json"
@@ -261,7 +262,7 @@ class TestEvalCommand:
         # With repeat=2 and 1 test case, we should have 2 results
         assert len(data["results"]["results"]) == 2
 
-    def test_verbose_flag(self):
+    def test_verbose_flag(self) -> None:
         """Test --verbose flag."""
         config_path = CONFIGS_DIR / "basic.yaml"
 
@@ -275,7 +276,7 @@ class TestEvalCommand:
 class TestExitCodes:
     """Exit code smoke tests."""
 
-    def test_success_exit_code(self):
+    def test_success_exit_code(self) -> None:
         """Test exit code 0 when all assertions pass."""
         config_path = CONFIGS_DIR / "basic.yaml"
 
@@ -283,7 +284,7 @@ class TestExitCodes:
 
         assert exit_code == 0
 
-    def test_failure_exit_code(self):
+    def test_failure_exit_code(self) -> None:
         """Test exit code 100 when assertions fail."""
         config_path = CONFIGS_DIR / "failing-assertion.yaml"
 
@@ -295,7 +296,7 @@ class TestExitCodes:
         # Exit code 100 indicates test failures
         assert exit_code == 100, f"Expected exit code 100, got {exit_code}"
 
-    def test_config_error_exit_code(self):
+    def test_config_error_exit_code(self) -> None:
         """Test exit code 1 for config errors."""
         stdout, stderr, exit_code = run_promptfoo(
             ["eval", "-c", "nonexistent-file.yaml", "--no-cache"],
@@ -308,7 +309,7 @@ class TestExitCodes:
 class TestEchoProvider:
     """Echo provider smoke tests."""
 
-    def test_echo_provider_basic(self):
+    def test_echo_provider_basic(self) -> None:
         """Test echo provider returns the prompt."""
         config_path = CONFIGS_DIR / "basic.yaml"
         output_path = OUTPUT_DIR / "echo-test.json"
@@ -330,7 +331,7 @@ class TestEchoProvider:
         assert "Hello" in output
         assert "World" in output
 
-    def test_echo_provider_with_multiple_vars(self):
+    def test_echo_provider_with_multiple_vars(self) -> None:
         """Test echo provider with multiple variables."""
         config_path = CONFIGS_DIR / "assertions.yaml"
         output_path = OUTPUT_DIR / "echo-multi-var.json"
@@ -355,7 +356,7 @@ class TestEchoProvider:
 class TestAssertions:
     """Assertion smoke tests."""
 
-    def test_contains_assertion(self):
+    def test_contains_assertion(self) -> None:
         """Test contains assertion."""
         config_path = CONFIGS_DIR / "basic.yaml"
 
@@ -365,7 +366,7 @@ class TestAssertions:
         # All assertions should pass
         assert "pass" in stdout.lower() or "✓" in stdout or "success" in stdout.lower()
 
-    def test_multiple_assertions(self):
+    def test_multiple_assertions(self) -> None:
         """Test multiple assertions in single test."""
         config_path = CONFIGS_DIR / "assertions.yaml"
 
@@ -373,7 +374,7 @@ class TestAssertions:
 
         assert exit_code == 0
 
-    def test_failing_assertion(self):
+    def test_failing_assertion(self) -> None:
         """Test failing assertion."""
         config_path = CONFIGS_DIR / "failing-assertion.yaml"
 

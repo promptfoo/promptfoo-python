@@ -6,7 +6,7 @@ These smoke tests verify that the core promptfoo CLI functionality works correct
 
 Smoke tests are high-level integration tests that verify the most critical functionality works end-to-end. They:
 
-- Run against the actual installed CLI (via `npx promptfoo`)
+- Run against the actual installed CLI via the Python wrapper (using either global promptfoo or npx)
 - Test the Python wrapper integration with the Node.js CLI
 - Use the `echo` provider to avoid external API dependencies
 - Verify command-line arguments, file I/O, and output formats
