@@ -134,7 +134,9 @@ Runs on every PR and push to main:
 
 - **Lint**: Ruff linting (`uv run ruff check src/`)
 - **Format Check**: Ruff formatting (`uv run ruff format --check src/`)
-- **Type Check**: mypy static analysis (`uv run mypy src/promptfoo/`)
+- **Type Check**: Both mypy and pyright in strict mode (run in parallel via matrix)
+  - `uv run mypy src/promptfoo/` - Standard Python type checker
+  - `uv run pyright src/promptfoo/` - Microsoft's type checker for additional coverage
 - **Unit Tests**: Fast tests with mocked dependencies (`uv run pytest -m 'not smoke'`)
 - **Smoke Tests**: Integration tests against real CLI (`uv run pytest tests/smoke/`)
 - **Build**: Package build validation
@@ -180,7 +182,9 @@ We use **OpenID Connect (OIDC)** for secure, credential-free PyPI publishing:
 
 - **Linter**: Ruff with extended rule sets (isort, pycodestyle, flake8-bugbear, etc.)
 - **Formatter**: Ruff (replaces Black)
-- **Type Checker**: mypy with strict settings
+- **Type Checkers**: Both **mypy** and **pyright** in strict mode for comprehensive coverage
+  - **mypy**: The standard Python type checker with strict mode and additional error codes
+  - **pyright**: Microsoft's fast type checker that catches different issues than mypy
 - **Package Manager**: uv (Astral's fast Python package manager)
 
 ### Running Checks Locally
@@ -198,8 +202,14 @@ uv run ruff check src/ --fix
 # Format code
 uv run ruff format src/
 
-# Type check
+# Type check with mypy (strict mode)
 uv run mypy src/promptfoo/
+
+# Type check with pyright (strict mode)
+uv run pyright src/promptfoo/
+
+# Run both type checkers (recommended before PR)
+uv run mypy src/promptfoo/ && uv run pyright src/promptfoo/
 
 # Run tests
 uv run pytest
@@ -330,6 +340,7 @@ git checkout -b feat/my-feature-name
 uv run ruff check src/ --fix
 uv run ruff format src/
 uv run mypy src/promptfoo/
+uv run pyright src/promptfoo/
 uv run pytest
 
 # 4. Commit with conventional commit message
@@ -357,6 +368,7 @@ git checkout -b fix/bug-description
 uv run ruff check src/ --fix
 uv run ruff format src/
 uv run mypy src/promptfoo/
+uv run pyright src/promptfoo/
 uv run pytest
 
 # 4. Commit with conventional commit message
