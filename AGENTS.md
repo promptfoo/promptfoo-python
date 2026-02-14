@@ -134,9 +134,14 @@ Runs on every PR and push to main:
 
 - **Lint**: Ruff linting (`uv run ruff check src/`)
 - **Format Check**: Ruff formatting (`uv run ruff format --check src/`)
-- **Type Check**: mypy static analysis (`uv run mypy src/promptfoo/`)
-- **Tests**: pytest on multiple Python versions (3.9, 3.13) and OSes (Ubuntu, Windows)
+- **Type Check**: Both mypy and pyright in strict mode (run in parallel via matrix)
+  - `uv run mypy src/promptfoo/` - Standard Python type checker
+  - `uv run pyright src/promptfoo/` - Microsoft's type checker for additional coverage
+- **Unit Tests**: Fast tests with mocked dependencies (`uv run pytest -m 'not smoke'`)
+- **Smoke Tests**: Integration tests against real CLI (`uv run pytest tests/smoke/`)
 - **Build**: Package build validation
+
+Tests run on multiple Python versions (3.9, 3.13) and OSes (Ubuntu, Windows).
 
 ### Release Workflow (`.github/workflows/release-please.yml`)
 
@@ -177,7 +182,9 @@ We use **OpenID Connect (OIDC)** for secure, credential-free PyPI publishing:
 
 - **Linter**: Ruff with extended rule sets (isort, pycodestyle, flake8-bugbear, etc.)
 - **Formatter**: Ruff (replaces Black)
-- **Type Checker**: mypy with strict settings
+- **Type Checkers**: Both **mypy** and **pyright** in strict mode for comprehensive coverage
+  - **mypy**: The standard Python type checker with strict mode and additional error codes
+  - **pyright**: Microsoft's fast type checker that catches different issues than mypy
 - **Package Manager**: uv (Astral's fast Python package manager)
 
 ### Running Checks Locally
@@ -195,8 +202,14 @@ uv run ruff check src/ --fix
 # Format code
 uv run ruff format src/
 
-# Type check
+# Type check with mypy (strict mode)
 uv run mypy src/promptfoo/
+
+# Type check with pyright (strict mode)
+uv run pyright src/promptfoo/
+
+# Run both type checkers (recommended before PR)
+uv run mypy src/promptfoo/ && uv run pyright src/promptfoo/
 
 # Run tests
 uv run pytest
@@ -214,7 +227,38 @@ uv run pytest
 
 ### Test Structure
 
-Tests are located in the root directory (not yet created, but should be in `tests/` when added).
+Tests are organized in the `tests/` directory:
+
+```
+tests/
+├── __init__.py
+├── test_cli.py              # Unit tests for CLI wrapper logic
+├── test_environment.py      # Unit tests for environment detection
+├── test_instructions.py     # Unit tests for installation instructions
+└── smoke/
+    ├── __init__.py
+    ├── README.md            # Smoke test documentation
+    ├── test_smoke.py        # Integration tests against real CLI
+    └── fixtures/
+        └── configs/         # YAML configs for smoke tests
+            ├── basic.yaml
+            ├── assertions.yaml
+            └── failing-assertion.yaml
+```
+
+### Test Types
+
+**Unit Tests** (`tests/test_*.py`):
+- Fast, isolated tests for individual functions
+- Mock external dependencies
+- Run on every PR
+
+**Smoke Tests** (`tests/smoke/`):
+- Integration tests that run the actual CLI via subprocess
+- Use the `echo` provider (no external API dependencies)
+- Test the full Python → Node.js integration
+- Slower but verify end-to-end functionality
+- Marked with `@pytest.mark.smoke`
 
 ### Test Matrix
 
@@ -229,15 +273,35 @@ CI tests across:
 # Install dependencies with dev extras
 uv sync --extra dev
 
-# Run all tests
+# Run all tests (unit + smoke)
 uv run pytest
+
+# Run only unit tests (fast)
+uv run pytest -m 'not smoke'
+
+# Run only smoke tests (slow, requires Node.js)
+uv run pytest tests/smoke/
 
 # Run with coverage
 uv run pytest --cov=src/promptfoo
 
+# Run specific test class
+uv run pytest tests/test_cli.py::TestMainFunction
+
 # Run specific test
-uv run pytest tests/test_cli.py::test_wrapper_detection
+uv run pytest tests/smoke/test_smoke.py::TestEvalCommand::test_basic_eval
 ```
+
+### Smoke Test Details
+
+Smoke tests verify critical CLI functionality:
+- **Basic CLI**: `--version`, `--help`, unknown commands, missing files
+- **Eval Command**: Output formats (JSON, YAML, CSV), flags (`--repeat`, `--verbose`)
+- **Exit Codes**: 0 for success, 100 for assertion failures, 1 for errors
+- **Echo Provider**: Variable substitution, multiple variables
+- **Assertions**: `contains`, `icontains`, failing assertions
+
+The smoke tests use a 120-second timeout to accommodate the first `npx` call which downloads promptfoo.
 
 ## Security Practices
 
@@ -276,6 +340,7 @@ git checkout -b feat/my-feature-name
 uv run ruff check src/ --fix
 uv run ruff format src/
 uv run mypy src/promptfoo/
+uv run pyright src/promptfoo/
 uv run pytest
 
 # 4. Commit with conventional commit message
@@ -303,6 +368,7 @@ git checkout -b fix/bug-description
 uv run ruff check src/ --fix
 uv run ruff format src/
 uv run mypy src/promptfoo/
+uv run pyright src/promptfoo/
 uv run pytest
 
 # 4. Commit with conventional commit message
@@ -365,14 +431,23 @@ promptfoo-python/
 ├── src/
 │   └── promptfoo/
 │       ├── __init__.py         # Package exports
-│       └── cli.py              # Main wrapper implementation
+│       ├── cli.py              # Main wrapper implementation
+│       ├── environment.py      # Environment detection
+│       └── instructions.py     # Node.js installation instructions
+├── tests/
+│   ├── test_cli.py             # Unit tests for CLI
+│   ├── test_environment.py     # Unit tests for environment detection
+│   ├── test_instructions.py    # Unit tests for instructions
+│   └── smoke/
+│       ├── test_smoke.py       # Integration smoke tests
+│       └── fixtures/configs/   # Test configuration files
 ├── AGENTS.md                   # This file (agent documentation)
 ├── CHANGELOG.md                # Auto-generated by release-please
 ├── CLAUDE.md                   # Points to AGENTS.md
 ├── LICENSE                     # MIT License
 ├── README.md                   # User-facing documentation
 ├── pyproject.toml              # Package configuration
-├── release-please-config.json # Release-please configuration
+├── release-please-config.json  # Release-please configuration
 └── .release-please-manifest.json # Release version tracking
 ```
 
@@ -443,5 +518,5 @@ git push --force
 
 ---
 
-**Last Updated**: 2026-01-05
+**Last Updated**: 2026-01-11
 **Maintained By**: @promptfoo/engineering

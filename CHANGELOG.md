@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2](https://github.com/promptfoo/promptfoo-python/compare/promptfoo-v0.1.1...promptfoo-v0.1.2) (2026-01-11)
+
+
+### Features
+
+* add comprehensive environment detection for better Node.js installation guidance ([#12](https://github.com/promptfoo/promptfoo-python/issues/12)) ([4334a67](https://github.com/promptfoo/promptfoo-python/commit/4334a6720edf28404df273ac767ffbb1688f611b))
+* add comprehensive type checking with mypy strict mode and pyright ([#20](https://github.com/promptfoo/promptfoo-python/issues/20)) ([8b10925](https://github.com/promptfoo/promptfoo-python/commit/8b1092581b2d1b30799fec021e5b4a30b9f4e79d))
+* add PostHog telemetry for wrapper usage tracking ([#19](https://github.com/promptfoo/promptfoo-python/issues/19)) ([80b5c67](https://github.com/promptfoo/promptfoo-python/commit/80b5c6780eabccad428d2db82934b898135527e4))
+* add smoke tests for CLI integration testing ([#14](https://github.com/promptfoo/promptfoo-python/issues/14)) ([8e653c4](https://github.com/promptfoo/promptfoo-python/commit/8e653c44bee6a18ef329420eb77658811b67eea1))
+
 ## [0.1.1](https://github.com/promptfoo/promptfoo-python/compare/promptfoo-v0.1.0...promptfoo-v0.1.1) (2026-01-06)
 
 
