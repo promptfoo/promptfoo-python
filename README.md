@@ -142,7 +142,7 @@ poetry run promptfoo eval
 ### With requirements.txt
 
 ```bash
-echo "promptfoo>=0.2.0" >> requirements.txt
+echo "promptfoo" >> requirements.txt
 pip install -r requirements.txt
 promptfoo eval
 ```
@@ -180,7 +180,7 @@ The wrapper needs Node.js to run. Install it:
 
 - **macOS**: `brew install node`
 - **Ubuntu/Debian**: `sudo apt install nodejs npm`
-- **Windows**: Download from https://nodejs.org/
+- **Windows**: Download from [nodejs.org](https://nodejs.org/)
 - **Any OS**: Use [nvm](https://github.com/nvm-sh/nvm)
 
 ### Slow First Run
@@ -210,14 +210,25 @@ Or install a specific version globally:
 npm install -g promptfoo@0.95.0
 ```
 
+### Telemetry
+
+This wrapper collects anonymous usage telemetry to help improve the package, mirroring the telemetry in the main promptfoo project.
+
+**What is collected:** A random anonymous user ID, wrapper version, Python version, and whether you're running in CI. If you've previously logged into promptfoo and your email is stored in `~/.promptfoo/promptfoo.yaml`, that is also sent.
+
+**To opt out:**
+
+```bash
+export PROMPTFOO_DISABLE_TELEMETRY=1
+```
+
 ## Contributing
 
-We welcome contributions! Check out our [contributing guide](https://www.promptfoo.dev/docs/contributing/) to get started.
+**For promptfoo features, docs, and bugs:** contribute to [promptfoo/promptfoo](https://github.com/promptfoo/promptfoo).
+
+**For pip wrapper issues** (installation, Python shim, CI integration): open issues here. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup.
 
 Join our [Discord community](https://discord.gg/promptfoo) for help and discussion.
-
-**For wrapper-specific issues**: Report them in this repository
-**For promptfoo features/bugs**: Report in the [main project](https://github.com/promptfoo/promptfoo)
 
 <a href="https://github.com/promptfoo/promptfoo/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=promptfoo/promptfoo" />
