@@ -10,6 +10,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to re-publish (e.g. promptfoo-v0.1.3). Use when a release build failed."
+        required: true
+        type: string
 
 jobs:
   release-please:
@@ -19,22 +24,27 @@ jobs:
       pull-requests: write
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
-      version: ${{ steps.release.outputs.version }}
+      tag_name: ${{ inputs.tag || steps.release.outputs.tag_name }}
     steps:
+      # Only run the bot on push events; skip it for manual re-publish triggers.
       - uses: googleapis/release-please-action@v4
         id: release
+        if: github.event_name == 'push'
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
   build:
-    if: needs.release-please.outputs.release_created == 'true'
-    runs-on: ubuntu-latest
+    if: |
+      inputs.tag != '' ||
+      needs.release-please.outputs.release_created == 'true'
     needs: release-please
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
 
       - uses: astral-sh/setup-uv@v7
         with:
@@ -46,22 +56,22 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev
 
-      - name: Run tests
-        run: |
-          # Quick smoke test before publishing
-          uv run python -c "import promptfoo; print(promptfoo.__version__)"
+      - name: Run unit tests
+        run: uv run pytest -m 'not smoke' -q
 
       - name: Build package
         run: uv build
 
-      - name: Verify package version matches release
+      - name: Verify package version matches release tag
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
         run: |
-          EXPECTED_VERSION="${{ needs.release-please.outputs.version }}"
+          EXPECTED_VERSION="${TAG#promptfoo-v}"
           if ls dist/*-${EXPECTED_VERSION}-*.whl 1> /dev/null 2>&1; then
-            echo "✓ Package version ${EXPECTED_VERSION} matches release"
+            echo "✓ Package version ${EXPECTED_VERSION} matches release tag ${TAG}"
           else
             echo "ERROR: Package version mismatch!"
-            echo "Expected version: ${EXPECTED_VERSION}"
+            echo "Expected: ${EXPECTED_VERSION} (from tag: ${TAG})"
             echo "Built packages:"
             ls -la dist/
             exit 1
@@ -74,7 +84,9 @@ jobs:
           path: dist/
 
   publish-pypi:
-    if: needs.release-please.outputs.release_created == 'true'
+    if: |
+      inputs.tag != '' ||
+      needs.release-please.outputs.release_created == 'true'
     needs: [build, release-please]
     runs-on: ubuntu-latest
     environment:
