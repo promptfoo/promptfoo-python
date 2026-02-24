@@ -15,6 +15,7 @@ from .telemetry import record_wrapper_used
 
 _WRAPPER_ENV = "PROMPTFOO_PY_WRAPPER"
 _WINDOWS_SHELL_EXTENSIONS = (".bat", ".cmd")
+_VERSION_ENV = "PROMPTFOO_VERSION"
 
 
 def check_node_installed() -> bool:
@@ -178,33 +179,37 @@ def main() -> NoReturn:
 
     Executes promptfoo using subprocess.run() with minimal configuration.
     """
-    # Check for Node.js installation
-    if not check_node_installed():
-        print_installation_help()
-        sys.exit(1)
-
-    # Build command: try external promptfoo first, fall back to npx
-    promptfoo_path = None if os.environ.get(_WRAPPER_ENV) else _find_external_promptfoo()
-    if promptfoo_path:
-        record_wrapper_used("global")
-        cmd = [promptfoo_path] + sys.argv[1:]
-        env = os.environ.copy()
-        env[_WRAPPER_ENV] = "1"
-        result = _run_command(cmd, env=env)
-    else:
-        npx_path = shutil.which("npx")
-        if npx_path:
-            record_wrapper_used("npx")
-            cmd = [npx_path, "-y", "promptfoo@latest"] + sys.argv[1:]
-            result = _run_command(cmd)
-        else:
-            record_wrapper_used("error")
-            print("ERROR: Neither promptfoo nor npx is available.", file=sys.stderr)
-            print("Please install promptfoo: npm install -g promptfoo", file=sys.stderr)
-            print("Or ensure Node.js is properly installed.", file=sys.stderr)
+    try:
+        # Check for Node.js installation
+        if not check_node_installed():
+            print_installation_help()
             sys.exit(1)
 
-    sys.exit(result.returncode)
+        # Build command: try external promptfoo first, fall back to npx
+        promptfoo_path = None if os.environ.get(_WRAPPER_ENV) else _find_external_promptfoo()
+        if promptfoo_path:
+            record_wrapper_used("global")
+            cmd = [promptfoo_path] + sys.argv[1:]
+            env = os.environ.copy()
+            env[_WRAPPER_ENV] = "1"
+            result = _run_command(cmd, env=env)
+        else:
+            npx_path = shutil.which("npx")
+            if npx_path:
+                record_wrapper_used("npx")
+                version = os.environ.get(_VERSION_ENV, "latest")
+                cmd = [npx_path, "-y", f"promptfoo@{version}"] + sys.argv[1:]
+                result = _run_command(cmd)
+            else:
+                record_wrapper_used("error")
+                print("ERROR: Neither promptfoo nor npx is available.", file=sys.stderr)
+                print("Please install promptfoo: npm install -g promptfoo", file=sys.stderr)
+                print("Or ensure Node.js is properly installed.", file=sys.stderr)
+                sys.exit(1)
+
+        sys.exit(result.returncode)
+    except KeyboardInterrupt:
+        sys.exit(130)
 
 
 if __name__ == "__main__":

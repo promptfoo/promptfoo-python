@@ -198,7 +198,7 @@ def _get_wsl_instructions() -> list[str]:
         "Recommended approach:",
         "   1. Use your Linux distribution's package manager (see below)",
         "   2. Or use nvm for version management:",
-        "      curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash",
+        "      curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash",
         "      source ~/.bashrc",
         "      nvm install 20",
         "",
@@ -255,7 +255,7 @@ def _get_debian_instructions(env: Environment) -> list[str]:
         lines.extend(
             [
                 "You don't have sudo access. Use nvm (Node Version Manager):",
-                "   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash",
+                "   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash",
                 "   source ~/.bashrc",
                 "   nvm install 20",
             ]
@@ -290,7 +290,7 @@ def _get_rhel_instructions(env: Environment) -> list[str]:
             lines.extend(
                 [
                     "Use nvm (Node Version Manager) - no sudo needed:",
-                    "   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash",
+                    "   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash",
                     "   source ~/.bashrc",
                     "   nvm install 20",
                 ]
@@ -315,7 +315,7 @@ def _get_rhel_instructions(env: Environment) -> list[str]:
             lines.extend(
                 [
                     "Use nvm (Node Version Manager) - no sudo needed:",
-                    "   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash",
+                    "   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash",
                     "   source ~/.bashrc",
                     "   nvm install 20",
                 ]
@@ -362,7 +362,7 @@ def _get_generic_linux_instructions() -> list[str]:
         "Use your package manager to install Node.js, or use nvm:",
         "",
         "Option 1 - nvm (Node Version Manager, works on any Linux):",
-        "   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash",
+        "   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash",
         "   source ~/.bashrc",
         "   nvm install 20",
         "",
@@ -379,7 +379,7 @@ def _get_macos_instructions() -> list[str]:
         "   brew install node",
         "",
         "Option 2 - nvm (Node Version Manager, for version management):",
-        "   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash",
+        "   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash",
         "   source ~/.zshrc  # or ~/.bashrc",
         "   nvm install 20",
         "",
