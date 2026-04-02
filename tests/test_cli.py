@@ -575,7 +575,11 @@ class TestMainFunction:
             }.get(cmd),
         )
         monkeypatch.setattr("promptfoo.cli.record_wrapper_used", lambda mode: None)
-        monkeypatch.setattr(subprocess, "run", MagicMock(return_value=subprocess.CompletedProcess([], raw_returncode)))
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            MagicMock(return_value=subprocess.CompletedProcess([], raw_returncode)),
+        )
 
         with pytest.raises(SystemExit) as exc_info:
             main()
