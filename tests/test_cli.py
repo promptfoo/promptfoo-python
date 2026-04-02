@@ -22,6 +22,7 @@ from promptfoo.cli import (
     _WRAPPER_ENV,
     _find_external_promptfoo,
     _find_windows_promptfoo,
+    _normalize_exit_code,
     _normalize_path,
     _requires_shell,
     _resolve_argv0,
@@ -358,6 +359,34 @@ class TestCommandExecution:
         assert call_args.kwargs.get("env") == env
 
 
+class TestExitCodeNormalization:
+    """Test subprocess exit code normalization."""
+
+    @pytest.mark.parametrize("returncode", [0, 1, 100, 255])
+    def test_normalize_exit_code_preserves_standard_codes(
+        self, returncode: int, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Standard shell exit codes pass through unchanged."""
+        monkeypatch.setattr(os, "name", "nt")
+
+        assert _normalize_exit_code(returncode) == returncode
+
+    @pytest.mark.parametrize("returncode", [4294967295, 3221226505, -1])
+    def test_normalize_exit_code_maps_windows_error_statuses(
+        self, returncode: int, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Windows unsigned and NTSTATUS failure values map to exit code 1."""
+        monkeypatch.setattr(os, "name", "nt")
+
+        assert _normalize_exit_code(returncode) == 1
+
+    def test_normalize_exit_code_maps_unix_signal_status(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Unix signal-style negative return codes map to 128 + signal number."""
+        monkeypatch.setattr(os, "name", "posix")
+
+        assert _normalize_exit_code(-15) == 143
+
+
 # =============================================================================
 # Integration Tests for main()
 # =============================================================================
@@ -532,6 +561,30 @@ class TestMainFunction:
             main()
 
         assert exc_info.value.code == 42
+
+    @pytest.mark.parametrize("raw_returncode", [4294967295, 3221226505])
+    def test_main_normalizes_windows_error_statuses(self, raw_returncode: int, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Converts Windows-specific subprocess statuses into a stable exit code."""
+        monkeypatch.setattr(os, "name", "nt")
+        monkeypatch.setattr(sys, "argv", ["promptfoo", "eval", "-c", "missing.yaml"])
+        monkeypatch.setattr(
+            "shutil.which",
+            lambda cmd, path=None: {
+                "node": "C:\\Program Files\\nodejs\\node.exe",
+                "npx": "C:\\Program Files\\nodejs\\npx.cmd",
+            }.get(cmd),
+        )
+        monkeypatch.setattr("promptfoo.cli.record_wrapper_used", lambda mode: None)
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            MagicMock(return_value=subprocess.CompletedProcess([], raw_returncode)),
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 1
 
 
 # =============================================================================
