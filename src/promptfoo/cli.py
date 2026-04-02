@@ -15,6 +15,7 @@ from .telemetry import record_wrapper_used
 
 _WRAPPER_ENV = "PROMPTFOO_PY_WRAPPER"
 _WINDOWS_SHELL_EXTENSIONS = (".bat", ".cmd")
+_WINDOWS_STATUS_SIGN_BIT = 1 << 31
 _VERSION_ENV = "PROMPTFOO_VERSION"
 
 
@@ -173,6 +174,18 @@ def _run_command(cmd: list[str], env: Optional[dict[str, str]] = None) -> subpro
     return subprocess.run(cmd, env=env)
 
 
+def _normalize_exit_code(returncode: int) -> int:
+    """Normalize subprocess return codes into portable process exit codes."""
+    if os.name == "nt":
+        if returncode < 0 or returncode & _WINDOWS_STATUS_SIGN_BIT:
+            return 1
+        return returncode
+
+    if returncode < 0:
+        return 128 + min(abs(returncode), 127)
+    return returncode
+
+
 def main() -> NoReturn:
     """
     Main entry point for the promptfoo CLI wrapper.
@@ -207,7 +220,7 @@ def main() -> NoReturn:
                 print("Or ensure Node.js is properly installed.", file=sys.stderr)
                 sys.exit(1)
 
-        sys.exit(result.returncode)
+        sys.exit(_normalize_exit_code(result.returncode))
     except KeyboardInterrupt:
         sys.exit(130)
 
