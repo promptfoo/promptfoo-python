@@ -2,9 +2,6 @@ name: Python CI
 
 on:
   pull_request:
-    paths-ignore:
-      - "**.md"
-      - "LICENSE"
   push:
     branches:
       - main
@@ -18,8 +15,40 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  classify-changes:
+    name: Classify Changes
+    runs-on: ubuntu-latest
+    outputs:
+      code_changed: ${{ steps.classify.outputs.code_changed }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Check whether this PR changes non-doc files
+        id: classify
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            echo "code_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+          echo "$changed_files"
+
+          if printf '%s\n' "$changed_files" | grep -Ev '(^$|\.md$|^LICENSE$)' > /dev/null; then
+            echo "code_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
   lint:
     name: Lint and Format
+    needs: classify-changes
+    if: needs.classify-changes.outputs.code_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -43,6 +72,8 @@ jobs:
 
   type-check:
     name: Type Check (${{ matrix.type-checker }})
+    needs: classify-changes
+    if: needs.classify-changes.outputs.code_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
@@ -71,6 +102,8 @@ jobs:
 
   test:
     name: Test (py${{ matrix.python-version }}, ${{ matrix.os }})
+    needs: classify-changes
+    if: needs.classify-changes.outputs.code_changed == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -151,6 +184,8 @@ jobs:
 
   test-npx-fallback:
     name: Test npx fallback (py${{ matrix.python-version }}, ${{ matrix.os }})
+    needs: classify-changes
+    if: needs.classify-changes.outputs.code_changed == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -223,6 +258,8 @@ jobs:
 
   build:
     name: Build Package
+    needs: classify-changes
+    if: needs.classify-changes.outputs.code_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -246,7 +283,7 @@ jobs:
 
   ci-success:
     name: CI Success
-    needs: [lint, type-check, test, test-npx-fallback, build]
+    needs: [classify-changes, lint, type-check, test, test-npx-fallback, build]
     if: always()
     runs-on: ubuntu-latest
     steps:
