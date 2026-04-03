@@ -17,9 +17,27 @@ from promptfoo.environment import (
     _detect_container,
     _detect_linux_distro,
     _detect_python_env,
+    _detect_wsl,
     _has_sudo_access,
+    _read_probe_file,
     detect_environment,
 )
+
+
+class TestProbeFileReads:
+    """Test best-effort probe file reads."""
+
+    def test_read_probe_file_returns_none_when_missing(self, tmp_path: Path) -> None:
+        """Missing probe files return None."""
+        assert _read_probe_file(tmp_path / "missing") is None
+
+    def test_read_probe_file_returns_none_when_unreadable(self, tmp_path: Path) -> None:
+        """Unreadable probe files return None instead of raising."""
+        probe_file = tmp_path / "probe"
+        probe_file.write_text("value")
+
+        with mock.patch("builtins.open", side_effect=OSError("permission denied")):
+            assert _read_probe_file(probe_file) is None
 
 
 class TestLinuxDistroDetection:
@@ -128,6 +146,40 @@ class TestLinuxDistroDetection:
                 assert distro == "ubuntu"
                 assert version == "22.04"
 
+    def test_detect_linux_distro_skips_unreadable_os_release(self) -> None:
+        """Unreadable /etc/os-release falls back to /usr/lib/os-release."""
+        etc_path = mock.Mock()
+        etc_path.exists.return_value = True
+
+        usr_path = mock.Mock()
+        usr_path.exists.return_value = True
+
+        def path_constructor(path_str: str) -> mock.Mock:
+            if path_str == "/etc/os-release":
+                return etc_path
+            elif path_str == "/usr/lib/os-release":
+                return usr_path
+            fallback_path = mock.Mock()
+            fallback_path.exists.return_value = False
+            return fallback_path
+
+        usr_open = mock.mock_open(read_data='ID=ubuntu\nVERSION_ID="22.04"')
+
+        def open_side_effect(path: mock.Mock) -> mock.MagicMock:
+            if path is etc_path:
+                raise OSError("permission denied")
+            if path is usr_path:
+                return usr_open()
+            raise AssertionError(f"unexpected probe path: {path!r}")
+
+        with (
+            mock.patch("promptfoo.environment.Path", side_effect=path_constructor),
+            mock.patch("builtins.open", side_effect=open_side_effect),
+        ):
+            distro, version = _detect_linux_distro()
+            assert distro == "ubuntu"
+            assert version == "22.04"
+
 
 class TestCloudProviderDetection:
     """Test cloud provider detection."""
@@ -184,6 +236,20 @@ class TestCloudProviderDetection:
                 provider = _detect_cloud_provider()
                 assert provider is None
 
+    def test_detect_cloud_provider_ignores_unreadable_probe_files(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Unreadable cloud metadata files fall back to environment variables."""
+        monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "my-project")
+
+        path_mock = mock.Mock()
+        path_mock.exists.return_value = True
+
+        with (
+            mock.patch("promptfoo.environment.Path", return_value=path_mock),
+            mock.patch("builtins.open", side_effect=OSError("permission denied")),
+        ):
+            provider = _detect_cloud_provider()
+            assert provider == "gcp"
+
 
 class TestContainerDetection:
     """Test container detection."""
@@ -204,6 +270,23 @@ class TestContainerDetection:
         assert isinstance(is_docker, bool)
         assert isinstance(is_k8s, bool)
 
+    def test_detect_container_ignores_unreadable_cgroup(self) -> None:
+        """Unreadable cgroup metadata does not raise."""
+
+        def path_constructor(path_str: str) -> mock.Mock:
+            path_mock = mock.Mock()
+            path_mock.exists.return_value = path_str == "/proc/1/cgroup"
+            return path_mock
+
+        with (
+            mock.patch("promptfoo.environment.Path", side_effect=path_constructor),
+            mock.patch("builtins.open", side_effect=OSError("permission denied")),
+            mock.patch.dict(os.environ, {}, clear=True),
+        ):
+            is_docker, is_k8s = _detect_container()
+            assert is_docker is False
+            assert is_k8s is False
+
 
 class TestWSLDetection:
     """Test WSL detection."""
@@ -212,27 +295,36 @@ class TestWSLDetection:
         """Detect WSL from WSL_DISTRO_NAME environment variable."""
         monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu")
 
-        from promptfoo.environment import _detect_wsl
-
         assert _detect_wsl() is True
 
     def test_detect_wsl_from_interop_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Detect WSL from WSL_INTEROP environment variable."""
         monkeypatch.setenv("WSL_INTEROP", "/run/WSL/123_interop")
 
-        from promptfoo.environment import _detect_wsl
-
         assert _detect_wsl() is True
 
     def test_no_wsl_detected(self) -> None:
         """Return False when not in WSL."""
         with mock.patch.dict(os.environ, {}, clear=True):
-            from promptfoo.environment import _detect_wsl
-
             # This will return False unless we're actually in WSL
             # Just verify it returns a boolean
             result = _detect_wsl()
             assert isinstance(result, bool)
+
+    def test_detect_wsl_ignores_unreadable_proc_version(self) -> None:
+        """Unreadable /proc/version does not raise."""
+
+        def path_constructor(path_str: str) -> mock.Mock:
+            path_mock = mock.Mock()
+            path_mock.exists.return_value = path_str == "/proc/version"
+            return path_mock
+
+        with (
+            mock.patch("promptfoo.environment.Path", side_effect=path_constructor),
+            mock.patch("builtins.open", side_effect=OSError("permission denied")),
+            mock.patch.dict(os.environ, {}, clear=True),
+        ):
+            assert _detect_wsl() is False
 
 
 class TestCIDetection:

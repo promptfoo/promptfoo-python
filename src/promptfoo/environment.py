@@ -33,6 +33,26 @@ class Environment:
     has_sudo: bool = False  # Best guess if user has sudo access
 
 
+def _read_probe_file(path: Path) -> Optional[str]:
+    """
+    Read an optional environment probe file.
+
+    Returns:
+        File contents, or None when the probe file does not exist or cannot be read.
+    """
+    if not path.exists():
+        return None
+
+    try:
+        with open(path) as f:
+            return f.read()
+    except OSError:
+        # Environment detection is best-effort. Proc/sys metadata files can be
+        # unreadable or disappear between exists() and open(), so treat that as
+        # "signal unavailable" and continue with fallback probes.
+        return None
+
+
 def _detect_linux_distro() -> tuple[Optional[str], Optional[str]]:
     """
     Detect Linux distribution and version.
@@ -48,47 +68,46 @@ def _detect_linux_distro() -> tuple[Optional[str], Optional[str]]:
 
     # Try /etc/os-release first, then /usr/lib/os-release (per freedesktop spec)
     for os_release_path in [Path("/etc/os-release"), Path("/usr/lib/os-release")]:
-        if os_release_path.exists():
-            try:
-                with open(os_release_path) as f:
-                    os_release = {}
-                    for line in f:
-                        line = line.strip()
-                        if not line or line.startswith("#"):
-                            continue
-                        if "=" in line:
-                            key, _, value = line.partition("=")
-                            # Remove quotes
-                            value = value.strip('"').strip("'")
-                            os_release[key] = value
+        os_release_content = _read_probe_file(os_release_path)
+        if os_release_content is None:
+            continue
 
-                    distro_id = os_release.get("ID", "").lower()
-                    version = os_release.get("VERSION_ID", "")
-                    id_like = os_release.get("ID_LIKE", "").lower().split()
+        os_release = {}
+        for line in os_release_content.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" in line:
+                key, _, value = line.partition("=")
+                # Remove quotes
+                value = value.strip('"').strip("'")
+                os_release[key] = value
 
-                    # Normalize distro IDs
-                    if distro_id in known_base_distros:
-                        return distro_id, version
-                    elif distro_id in rhel_family:
-                        # Oracle Linux (ol), Amazon Linux (amzn)
-                        return "rhel", version
-                    elif distro_id in suse_family:
-                        return "suse", version
+        distro_id = os_release.get("ID", "").lower()
+        version = os_release.get("VERSION_ID", "")
+        id_like = os_release.get("ID_LIKE", "").lower().split()
 
-                    # Check ID_LIKE for derivative distributions (e.g., Pop!_OS, Raspbian, Mint)
-                    if id_like:
-                        for parent in id_like:
-                            if parent in known_base_distros:
-                                return parent, version
-                            elif parent in rhel_family:
-                                return "rhel", version
-                            elif parent in suse_family:
-                                return "suse", version
+        # Normalize distro IDs
+        if distro_id in known_base_distros:
+            return distro_id, version
+        elif distro_id in rhel_family:
+            # Oracle Linux (ol), Amazon Linux (amzn)
+            return "rhel", version
+        elif distro_id in suse_family:
+            return "suse", version
 
-                    # Return the raw distro_id if we couldn't normalize it
-                    return distro_id, version
-            except OSError:
-                pass
+        # Check ID_LIKE for derivative distributions (e.g., Pop!_OS, Raspbian, Mint)
+        if id_like:
+            for parent in id_like:
+                if parent in known_base_distros:
+                    return parent, version
+                elif parent in rhel_family:
+                    return "rhel", version
+                elif parent in suse_family:
+                    return "suse", version
+
+        # Return the raw distro_id if we couldn't normalize it
+        return distro_id, version
 
     # Fallback: check for specific files
     if Path("/etc/debian_version").exists():
@@ -112,14 +131,9 @@ def _detect_cloud_provider() -> Optional[str]:
     """
     # AWS detection
     # Check for EC2 metadata
-    if Path("/sys/hypervisor/uuid").exists():
-        try:
-            with open("/sys/hypervisor/uuid") as f:
-                uuid = f.read().strip()
-                if uuid.startswith("ec2") or uuid.startswith("EC2"):
-                    return "aws"
-        except OSError:
-            pass
+    uuid = _read_probe_file(Path("/sys/hypervisor/uuid"))
+    if uuid and uuid.strip().lower().startswith("ec2"):
+        return "aws"
 
     # Check AWS environment variables
     if os.getenv("AWS_EXECUTION_ENV") or os.getenv("AWS_REGION"):
@@ -127,29 +141,21 @@ def _detect_cloud_provider() -> Optional[str]:
 
     # GCP detection
     # Check for GCP metadata
-    if Path("/sys/class/dmi/id/product_name").exists():
-        try:
-            with open("/sys/class/dmi/id/product_name") as f:
-                product = f.read().strip()
-                if "Google" in product or "GCE" in product:
-                    return "gcp"
-        except OSError:
-            pass
+    product = _read_probe_file(Path("/sys/class/dmi/id/product_name"))
+    if product:
+        product = product.strip()
+        if "Google" in product or "GCE" in product:
+            return "gcp"
 
     # Check GCP environment variables
     if os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("GCP_PROJECT"):
         return "gcp"
 
     # Azure detection
-    if Path("/sys/class/dmi/id/sys_vendor").exists():
-        try:
-            with open("/sys/class/dmi/id/sys_vendor") as f:
-                vendor = f.read().strip()
-                # Could be Azure or Hyper-V, check for Azure-specific
-                if "Microsoft Corporation" in vendor and Path("/var/lib/waagent").exists():
-                    return "azure"
-        except OSError:
-            pass
+    vendor = _read_probe_file(Path("/sys/class/dmi/id/sys_vendor"))
+    # Could be Azure or Hyper-V, check for Azure-specific
+    if vendor and "Microsoft Corporation" in vendor.strip() and Path("/var/lib/waagent").exists():
+        return "azure"
 
     # Check Azure environment variables
     if os.getenv("AZURE_SUBSCRIPTION_ID") or os.getenv("WEBSITE_INSTANCE_ID"):
@@ -173,14 +179,9 @@ def _detect_container() -> tuple[bool, bool]:
         is_docker = True
 
     # Also check cgroup
-    if Path("/proc/1/cgroup").exists():
-        try:
-            with open("/proc/1/cgroup") as f:
-                cgroup_content = f.read()
-                if "docker" in cgroup_content or "containerd" in cgroup_content:
-                    is_docker = True
-        except OSError:
-            pass
+    cgroup_content = _read_probe_file(Path("/proc/1/cgroup"))
+    if cgroup_content and ("docker" in cgroup_content or "containerd" in cgroup_content):
+        is_docker = True
 
     # Kubernetes detection
     if os.getenv("KUBERNETES_SERVICE_HOST"):
@@ -201,14 +202,11 @@ def _detect_wsl() -> bool:
         return True
 
     # Check /proc/version for Microsoft/WSL signatures
-    if Path("/proc/version").exists():
-        try:
-            with open("/proc/version") as f:
-                version_info = f.read().lower()
-                if "microsoft" in version_info or "wsl" in version_info:
-                    return True
-        except OSError:
-            pass
+    version_info = _read_probe_file(Path("/proc/version"))
+    if version_info:
+        version_info = version_info.lower()
+        if "microsoft" in version_info or "wsl" in version_info:
+            return True
 
     # Check for Windows filesystem mounts (WSL mounts Windows drives at /mnt/)
     # This is less reliable but can catch WSL 1
