@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4](https://github.com/promptfoo/promptfoo-python/compare/promptfoo-v0.1.3...promptfoo-v0.1.4) (2026-04-04)
+
+
+### Bug Fixes
+
+* checkout release tag in build job and add manual re-publish trigger ([#30](https://github.com/promptfoo/promptfoo-python/issues/30)) ([5e0bd39](https://github.com/promptfoo/promptfoo-python/commit/5e0bd395e15d2f7b10512ead4fdcf6920847dcd0))
+* clarify best-effort environment probe failures ([158007c](https://github.com/promptfoo/promptfoo-python/commit/158007c7f586155aa35cd7f7f68d513b38b7bb60))
+* normalize Windows subprocess exit statuses ([#35](https://github.com/promptfoo/promptfoo-python/issues/35)) ([5e5a931](https://github.com/promptfoo/promptfoo-python/commit/5e5a931a0ec37fb1bb7cdd2dfea1674982ebb7d9))
+
+
+### Documentation
+
+* add CONTRIBUTING, CODE_OF_CONDUCT, and SECURITY files ([#32](https://github.com/promptfoo/promptfoo-python/issues/32)) ([414c2d5](https://github.com/promptfoo/promptfoo-python/commit/414c2d596e45bc9846e83796a66f81982c164cb5))
+
 ## [0.1.3](https://github.com/promptfoo/promptfoo-python/compare/promptfoo-v0.1.2...promptfoo-v0.1.3) (2026-02-24)
 
 
