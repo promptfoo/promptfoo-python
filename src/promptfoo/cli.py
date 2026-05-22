@@ -9,7 +9,7 @@ import os
 import shutil
 import subprocess
 import sys
-from typing import NoReturn, Optional
+from typing import NoReturn
 
 from .telemetry import record_wrapper_used
 
@@ -61,7 +61,7 @@ def _split_path(path_value: str) -> list[str]:
     return entries
 
 
-def _resolve_argv0() -> Optional[str]:
+def _resolve_argv0() -> str | None:
     """Resolve the absolute path of the current script (argv[0])."""
     if not sys.argv:
         return None
@@ -76,7 +76,7 @@ def _resolve_argv0() -> Optional[str]:
     return None
 
 
-def _find_windows_promptfoo() -> Optional[str]:
+def _find_windows_promptfoo() -> str | None:
     """
     Search for promptfoo in standard Windows installation locations.
     Useful when not in PATH.
@@ -127,7 +127,7 @@ def _is_executing_wrapper(found_path: str) -> bool:
     )
 
 
-def _search_path_excluding(exclude_dir: str) -> Optional[str]:
+def _search_path_excluding(exclude_dir: str) -> str | None:
     """Search PATH for promptfoo, excluding the specified directory."""
     path_entries = [entry for entry in _split_path(os.environ.get("PATH", "")) if _normalize_path(entry) != exclude_dir]
     if not path_entries:
@@ -135,7 +135,7 @@ def _search_path_excluding(exclude_dir: str) -> Optional[str]:
     return shutil.which("promptfoo", path=os.pathsep.join(path_entries))
 
 
-def _find_external_promptfoo() -> Optional[str]:
+def _find_external_promptfoo() -> str | None:
     """Find the external promptfoo executable, avoiding the wrapper itself."""
     # 1. First naive search
     candidate = shutil.which("promptfoo")
@@ -167,7 +167,7 @@ def _requires_shell(executable: str) -> bool:
     return ext.lower() in _WINDOWS_SHELL_EXTENSIONS
 
 
-def _run_command(cmd: list[str], env: Optional[dict[str, str]] = None) -> subprocess.CompletedProcess[bytes]:
+def _run_command(cmd: list[str], env: dict[str, str] | None = None) -> subprocess.CompletedProcess[bytes]:
     """Execute a command, handling shell requirements on Windows."""
     if _requires_shell(cmd[0]):
         return subprocess.run(subprocess.list2cmdline(cmd), shell=True, env=env)

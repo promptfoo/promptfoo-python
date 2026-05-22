@@ -11,7 +11,7 @@ import platform
 import sys
 import uuid
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import yaml
 from posthog import Posthog
@@ -95,7 +95,7 @@ def _get_user_id() -> str:
     return user_id
 
 
-def _get_user_email() -> Optional[str]:
+def _get_user_email() -> str | None:
     """Get the user email from the global config if set."""
     config = _read_global_config()
     account = config.get("account", {})
@@ -106,9 +106,9 @@ class _Telemetry:
     """Internal telemetry client for the promptfoo Python wrapper."""
 
     def __init__(self) -> None:
-        self._client: Optional[Posthog] = None
-        self._user_id: Optional[str] = None
-        self._email: Optional[str] = None
+        self._client: Posthog | None = None
+        self._user_id: str | None = None
+        self._email: str | None = None
         self._initialized = False
 
     @property
@@ -136,7 +136,7 @@ class _Telemetry:
         except Exception:
             self._client = None  # Silently fail
 
-    def record(self, event_name: str, properties: Optional[dict[str, Any]] = None) -> None:
+    def record(self, event_name: str, properties: dict[str, Any] | None = None) -> None:
         """Record a telemetry event."""
         if self._disabled:
             return
@@ -181,7 +181,7 @@ class _Telemetry:
 
 
 # Global singleton instance
-_telemetry: Optional[_Telemetry] = None
+_telemetry: _Telemetry | None = None
 
 
 def _get_telemetry() -> _Telemetry:

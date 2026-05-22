@@ -16,7 +16,7 @@ This repository is only the thin Python shim that lets people install promptfoo 
 
 ### Setup
 
-Requires Python 3.9+, Node.js 20+, and [uv](https://github.com/astral-sh/uv).
+Requires Python 3.10+, Node.js 20+, and [uv](https://github.com/astral-sh/uv).
 
 ```bash
 git clone https://github.com/promptfoo/promptfoo-python.git

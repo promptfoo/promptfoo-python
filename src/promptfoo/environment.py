@@ -10,7 +10,6 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 
 @dataclass
@@ -18,22 +17,22 @@ class Environment:
     """Information about the current execution environment."""
 
     os_type: str  # "linux", "darwin", "windows"
-    linux_distro: Optional[str] = None  # "ubuntu", "debian", "rhel", "fedora", "alpine", "arch", etc.
-    linux_distro_version: Optional[str] = None  # e.g., "22.04", "11", "9"
-    cloud_provider: Optional[str] = None  # "aws", "gcp", "azure"
+    linux_distro: str | None = None  # "ubuntu", "debian", "rhel", "fedora", "alpine", "arch", etc.
+    linux_distro_version: str | None = None  # e.g., "22.04", "11", "9"
+    cloud_provider: str | None = None  # "aws", "gcp", "azure"
     is_lambda: bool = False  # AWS Lambda
     is_cloud_function: bool = False  # GCP Cloud Functions or Azure Functions
     is_docker: bool = False
     is_kubernetes: bool = False
     is_wsl: bool = False  # Windows Subsystem for Linux
     is_ci: bool = False
-    ci_platform: Optional[str] = None  # "github", "gitlab", "circleci", "jenkins", etc.
+    ci_platform: str | None = None  # "github", "gitlab", "circleci", "jenkins", etc.
     is_venv: bool = False
     is_conda: bool = False
     has_sudo: bool = False  # Best guess if user has sudo access
 
 
-def _read_probe_file(path: Path) -> Optional[str]:
+def _read_probe_file(path: Path) -> str | None:
     """
     Read an optional environment probe file.
 
@@ -53,7 +52,7 @@ def _read_probe_file(path: Path) -> Optional[str]:
         return None
 
 
-def _detect_linux_distro() -> tuple[Optional[str], Optional[str]]:
+def _detect_linux_distro() -> tuple[str | None, str | None]:
     """
     Detect Linux distribution and version.
 
@@ -122,7 +121,7 @@ def _detect_linux_distro() -> tuple[Optional[str], Optional[str]]:
     return None, None
 
 
-def _detect_cloud_provider() -> Optional[str]:
+def _detect_cloud_provider() -> str | None:
     """
     Detect if running on a cloud provider.
 
@@ -213,7 +212,7 @@ def _detect_wsl() -> bool:
     return Path("/mnt/c").exists() and Path("/proc/version").exists()
 
 
-def _detect_ci() -> tuple[bool, Optional[str]]:
+def _detect_ci() -> tuple[bool, str | None]:
     """
     Detect if running in a CI/CD environment.
 

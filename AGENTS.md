@@ -8,7 +8,7 @@ This document provides comprehensive guidance for AI agents and developers worki
 
 - **Primary Purpose**: Enable pip-based installation of promptfoo for Python-centric environments
 - **Implementation**: Thin wrapper that delegates to the official TypeScript promptfoo package
-- **Requirements**: Python 3.9+ and Node.js 20+
+- **Requirements**: Python 3.10+ and Node.js 20+
 
 ### How It Works
 
@@ -141,7 +141,7 @@ Runs on every PR and push to main:
 - **Smoke Tests**: Integration tests against real CLI (`uv run pytest tests/smoke/`)
 - **Build**: Package build validation
 
-Tests run on multiple Python versions (3.9, 3.13) and OSes (Ubuntu, Windows).
+Tests run on multiple Python versions (3.10, 3.13) and OSes (Ubuntu, Windows).
 
 ### Release Workflow (`.github/workflows/release-please.yml`)
 
@@ -174,9 +174,9 @@ We use **OpenID Connect (OIDC)** for secure, credential-free PyPI publishing:
 
 ### Python Version Support
 
-- **Minimum**: Python 3.9
-- **Tested**: Python 3.9 and 3.13
-- **Target**: `py39` for Ruff and mypy
+- **Minimum**: Python 3.10
+- **Tested**: Python 3.10 and 3.13
+- **Target**: `py310` for Ruff and mypy
 
 ### Code Quality Tools
 
@@ -264,7 +264,7 @@ tests/
 
 CI tests across:
 - **Operating Systems**: Ubuntu, Windows (macOS temporarily excluded due to runner constraints)
-- **Python Versions**: 3.9 (min), 3.13 (max)
+- **Python Versions**: 3.10 (min), 3.13 (max)
 - **Scenarios**: Global promptfoo install vs. npx fallback
 
 ### Running Tests
