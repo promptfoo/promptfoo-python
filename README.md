@@ -47,7 +47,7 @@
 
 ### Requirements
 
-- **Python 3.9+** (for this wrapper)
+- **Python 3.10+** (for this wrapper)
 - **Node.js 20+** (required to run promptfoo)
 
 ### Install from PyPI

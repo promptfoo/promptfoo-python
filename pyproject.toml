@@ -19,15 +19,15 @@ classifiers = [
     "Topic :: Software Development :: Testing",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "posthog>=3.0.0",
     "pyyaml>=6.0.0",
@@ -40,11 +40,6 @@ dev = [
     "pyright>=1.1.400",
     "ruff>=0.12.0",
     "types-pyyaml>=6.0.0",
-]
-
-[tool.uv]
-constraint-dependencies = [
-    "urllib3<2.7; python_full_version < '3.10'",
 ]
 
 [project.scripts]
@@ -75,7 +70,7 @@ packages = ["src/promptfoo"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.lint]
 extend-select = [
@@ -97,7 +92,7 @@ ignore = [
 quote-style = "double"
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 # Enable strict mode for comprehensive type checking
 strict = true
 # Additional strictness beyond --strict
@@ -121,7 +116,7 @@ module = "posthog.*"
 ignore_missing_imports = true
 
 [tool.pyright]
-pythonVersion = "3.9"
+pythonVersion = "3.10"
 pythonPlatform = "All"
 typeCheckingMode = "strict"
 include = ["src/promptfoo"]
