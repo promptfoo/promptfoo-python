@@ -9,6 +9,7 @@ This module tests the PostHog telemetry integration including:
 """
 
 import os
+import threading
 from pathlib import Path
 from unittest import mock
 
@@ -17,11 +18,13 @@ import pytest
 from promptfoo.telemetry import (
     _get_config_dir,
     _get_env_bool,
+    _get_telemetry,
     _get_user_email,
     _get_user_id,
     _is_ci,
     _read_global_config,
     _Telemetry,
+    _telemetry_lock,
     _write_global_config,
     record_wrapper_used,
 )
@@ -268,6 +271,23 @@ class TestTelemetryClass:
             assert telemetry._client is mock_client
             mock_client.capture.assert_called_once()
 
+    def test_initialization_reads_global_config_once(self) -> None:
+        """Initialization shares one config read across user identity lookups."""
+        config = {"id": "test-user-id", "account": {"email": "test@example.com"}}
+
+        with (
+            mock.patch.dict(os.environ, {}, clear=True),
+            mock.patch("promptfoo.telemetry._read_global_config", return_value=config) as mock_read_config,
+            mock.patch("promptfoo.telemetry.Posthog") as mock_posthog,
+        ):
+            telemetry = _Telemetry()
+            telemetry._ensure_initialized()
+
+            mock_read_config.assert_called_once_with()
+            assert telemetry._user_id == "test-user-id"
+            assert telemetry._email == "test@example.com"
+            mock_posthog.assert_called_once()
+
     def test_record_enriches_properties(self, tmp_path: Path) -> None:
         """Test record adds enriched properties."""
         config_file = tmp_path / "promptfoo.yaml"
@@ -471,3 +491,38 @@ class TestRecordWrapperUsed:
         with mock.patch("promptfoo.telemetry._telemetry", None):
             # Should not raise or make any calls
             record_wrapper_used("global")
+
+    def test_get_telemetry_guards_singleton_initialization_with_lock(self) -> None:
+        """Singleton construction waits on its lock and registers shutdown once."""
+        started = threading.Event()
+        finished = threading.Event()
+        instance = mock.Mock(spec=_Telemetry)
+        results: list[_Telemetry] = []
+
+        def initialize() -> None:
+            started.set()
+            results.append(_get_telemetry())
+            finished.set()
+
+        with (
+            mock.patch("promptfoo.telemetry._telemetry", None),
+            mock.patch("promptfoo.telemetry._Telemetry", return_value=instance) as mock_telemetry,
+            mock.patch("promptfoo.telemetry.atexit.register") as mock_register,
+        ):
+            _telemetry_lock.acquire()
+            try:
+                worker = threading.Thread(target=initialize)
+                worker.start()
+                assert started.wait(timeout=1)
+                assert finished.wait(timeout=0.05) is False
+                mock_telemetry.assert_not_called()
+            finally:
+                _telemetry_lock.release()
+
+            worker.join(timeout=1)
+            assert worker.is_alive() is False
+
+            assert results == [instance]
+            assert _get_telemetry() is instance
+            mock_telemetry.assert_called_once_with()
+            mock_register.assert_called_once_with(instance.shutdown)
