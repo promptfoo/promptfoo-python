@@ -141,7 +141,7 @@ Runs on every PR and push to main:
 - **Smoke Tests**: Integration tests against real CLI (`uv run pytest tests/smoke/`)
 - **Build**: Package build validation
 
-Tests run on multiple Python versions (3.10, 3.13) and OSes (Ubuntu, Windows).
+Tests run on multiple Python versions (3.10, 3.14) and OSes (Ubuntu, Windows).
 
 ### Release Workflow (`.github/workflows/release-please.yml`)
 
@@ -175,7 +175,7 @@ We use **OpenID Connect (OIDC)** for secure, credential-free PyPI publishing:
 ### Python Version Support
 
 - **Minimum**: Python 3.10
-- **Tested**: Python 3.10 and 3.13
+- **Tested**: Python 3.10 and 3.14
 - **Target**: `py310` for Ruff and mypy
 
 ### Code Quality Tools
@@ -264,7 +264,7 @@ tests/
 
 CI tests across:
 - **Operating Systems**: Ubuntu, Windows (macOS temporarily excluded due to runner constraints)
-- **Python Versions**: 3.10 (min), 3.13 (max)
+- **Python Versions**: 3.10 (min), 3.14 (max)
 - **Scenarios**: Global promptfoo install vs. npx fallback
 
 ### Running Tests
