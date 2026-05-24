@@ -31,6 +31,13 @@ class TestProbeFileReads:
         """Missing probe files return None."""
         assert _read_probe_file(tmp_path / "missing") is None
 
+    def test_read_probe_file_returns_content_when_readable(self, tmp_path: Path) -> None:
+        """Readable probe files return their text content."""
+        probe_file = tmp_path / "probe"
+        probe_file.write_text("value")
+
+        assert _read_probe_file(probe_file) == "value"
+
     def test_read_probe_file_returns_none_when_unreadable(self, tmp_path: Path) -> None:
         """Unreadable probe files return None instead of raising."""
         probe_file = tmp_path / "probe"
@@ -245,6 +252,7 @@ class TestContainerDetection:
             mock_path.return_value.exists.return_value = False
 
             is_docker, is_k8s = _detect_container()
+            assert is_docker is False
             assert is_k8s is True
 
     def test_detect_container_returns_tuple(self) -> None:

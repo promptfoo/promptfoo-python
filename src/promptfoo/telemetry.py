@@ -9,6 +9,7 @@ import atexit
 import os
 import platform
 import sys
+import threading
 import uuid
 from pathlib import Path
 from typing import Any
@@ -82,9 +83,10 @@ def _write_global_config(config: dict[str, Any]) -> None:
         pass  # Silently fail - telemetry should never break the CLI
 
 
-def _get_user_id() -> str:
+def _get_user_id(config: dict[str, Any] | None = None) -> str:
     """Get or create a unique user ID stored in the global config."""
-    config = _read_global_config()
+    if config is None:
+        config = _read_global_config()
     user_id = config.get("id")
 
     if not user_id:
@@ -95,9 +97,10 @@ def _get_user_id() -> str:
     return user_id
 
 
-def _get_user_email() -> str | None:
+def _get_user_email(config: dict[str, Any] | None = None) -> str | None:
     """Get the user email from the global config if set."""
-    config = _read_global_config()
+    if config is None:
+        config = _read_global_config()
     account = config.get("account", {})
     return account.get("email") if isinstance(account, dict) else None
 
@@ -127,8 +130,9 @@ class _Telemetry:
             return
 
         try:
-            self._user_id = _get_user_id()
-            self._email = _get_user_email()
+            config = _read_global_config()
+            self._user_id = _get_user_id(config)
+            self._email = _get_user_email(config)
             self._client = Posthog(
                 project_api_key=_POSTHOG_KEY,
                 host=_POSTHOG_HOST,
@@ -182,15 +186,20 @@ class _Telemetry:
 
 # Global singleton instance
 _telemetry: _Telemetry | None = None
+_telemetry_lock = threading.Lock()
 
 
 def _get_telemetry() -> _Telemetry:
     """Get the global telemetry instance."""
     global _telemetry
-    if _telemetry is None:
-        _telemetry = _Telemetry()
-        atexit.register(_telemetry.shutdown)
-    return _telemetry
+    if _telemetry is not None:
+        return _telemetry
+
+    with _telemetry_lock:
+        if _telemetry is None:
+            _telemetry = _Telemetry()
+            atexit.register(_telemetry.shutdown)
+        return _telemetry
 
 
 def record_wrapper_used(method: str) -> None:
