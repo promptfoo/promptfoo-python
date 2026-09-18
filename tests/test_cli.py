@@ -18,6 +18,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from promptfoo.cli import (
+    _VERSION_ENV,
     _WINDOWS_SHELL_EXTENSIONS,
     _WRAPPER_ENV,
     _find_external_promptfoo,
@@ -400,6 +401,7 @@ class TestMainFunction:
         """Provide a supported Node version independently of downstream command mocks."""
         version = MagicMock(return_value=(22, 22, 0))
         monkeypatch.setattr("promptfoo.cli.get_node_version", version)
+        monkeypatch.delenv(_VERSION_ENV, raising=False)
         return version
 
     def test_main_exits_when_node_not_installed(
@@ -555,6 +557,22 @@ class TestMainFunction:
             assert "-y" in cmd
             assert "promptfoo@latest" in cmd
             assert "eval" in cmd
+
+    def test_main_passes_requested_version_to_npx(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Use the requested npm package version when there is no external CLI."""
+        monkeypatch.setenv(_VERSION_ENV, "0.123.0")
+        monkeypatch.setattr(sys, "argv", ["promptfoo", "eval"])
+        monkeypatch.setattr("shutil.which", lambda cmd: {"node": "node", "npx": "npx"}.get(cmd))
+        monkeypatch.setattr("promptfoo.cli._find_external_promptfoo", lambda: None)
+        monkeypatch.setattr("promptfoo.cli.record_wrapper_used", lambda mode: None)
+        run = MagicMock(return_value=subprocess.CompletedProcess([], 0))
+        monkeypatch.setattr("promptfoo.cli._run_command", run)
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        run.assert_called_once_with(["npx", "-y", "promptfoo@0.123.0", "eval"])
 
     def test_main_exits_when_neither_external_nor_npx_available(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
