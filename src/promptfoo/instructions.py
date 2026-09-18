@@ -39,6 +39,7 @@ def _container_instructions(env: Environment) -> list[str]:
             f"CONTAINER: add Node.js 24 to your existing Debian {debian_release.title()} Python image; "
             "this example uses Python 3.12.",
             "Keep the second FROM set to your existing image and Python environment:",
+            "Run these build steps as root; restore your original USER afterward if needed.",
             f"   FROM node:24-{debian_release}-slim AS node",
             f"   FROM python:3.12-slim-{debian_release}",
             "   COPY --from=node /usr/local/bin/node /usr/local/bin/node",
@@ -46,8 +47,9 @@ def _container_instructions(env: Environment) -> list[str]:
             "   RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm "
             "&& ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx",
             "   RUN ln -sf /usr/local/bin/node /usr/bin/node && ln -sf /usr/local/bin/npm /usr/bin/npm "
-            "&& ln -sf /usr/local/bin/npx /usr/bin/npx",
-            '   ENV PATH="${PATH}:/usr/local/bin"',
+            "&& ln -sf /usr/local/bin/npx /usr/bin/npx && mkdir -p /opt/npm-global",
+            '   ENV NPM_CONFIG_PREFIX="/opt/npm-global"',
+            '   ENV PATH="${PATH}:/usr/local/bin:/opt/npm-global/bin"',
             "   Official Node.js images: https://hub.docker.com/_/node",
         ]
     if env.linux_distro == "ubuntu":

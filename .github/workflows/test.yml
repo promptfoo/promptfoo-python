@@ -105,9 +105,13 @@ jobs:
             if [ "$distro" = alpine ]; then
               echo 'RUN python -c "import sys; assert sys.prefix == \"/opt/venv\""' >> "$instruction_dir/$distro/Dockerfile"
             else
-              echo 'RUN python -c "import sys, promptfoo_help_probe; assert sys.version_info[:2] == (3, 12)"' >> "$instruction_dir/$distro/Dockerfile"
-              echo 'RUN env PATH=/opt/venv/bin:/usr/bin:/bin sh -c "node --version && npm --version && npx --version"' >> "$instruction_dir/$distro/Dockerfile"
-              echo 'RUN prefix="$(npm prefix --global)" && case ":$PATH:" in *":$prefix/bin:"*) ;; *) exit 1 ;; esac' >> "$instruction_dir/$distro/Dockerfile"
+              cat >> "$instruction_dir/$distro/Dockerfile" <<'EOF'
+          RUN python -c "import sys, promptfoo_help_probe; assert sys.version_info[:2] == (3, 12)"
+          RUN env PATH=/opt/venv/bin:/usr/bin:/bin sh -c "node --version && npm --version && npx --version"
+          RUN prefix="$(npm prefix --global)" && test "$prefix" = /opt/npm-global \
+              && python -c "import sysconfig; assert sysconfig.get_path('scripts') != '/opt/npm-global/bin'" \
+              && case ":$PATH:" in *":$prefix/bin:"*) ;; *) exit 1 ;; esac
+          EOF
             fi
             docker build --progress=plain "$instruction_dir/$distro"
           done
