@@ -48,10 +48,10 @@ def _container_instructions(env: Environment) -> list[str]:
     if env.linux_distro == "ubuntu":
         return [
             "UBUNTU CONTAINER: keep your existing FROM and install Node.js 24 in place as root:",
-            "   RUN apt-get update && apt-get install -y --no-install-recommends bash ca-certificates curl",
-            "   RUN curl -fsSL https://deb.nodesource.com/setup_24.x -o /tmp/nodesource-setup.sh "
-            "&& bash /tmp/nodesource-setup.sh && rm /tmp/nodesource-setup.sh",
-            "   RUN apt-get install -y --no-install-recommends nodejs && rm -rf /var/lib/apt/lists/*",
+            "   RUN apt-get update && apt-get install -y --no-install-recommends bash ca-certificates curl "
+            "&& curl -fsSL https://deb.nodesource.com/setup_24.x -o /tmp/nodesource-setup.sh "
+            "&& bash /tmp/nodesource-setup.sh && rm /tmp/nodesource-setup.sh "
+            "&& apt-get install -y --no-install-recommends nodejs && rm -rf /var/lib/apt/lists/*",
             "   NodeSource's apt repository: https://github.com/nodesource/distributions",
         ]
     if env.linux_distro == "amzn" and env.linux_distro_version == "2023":
@@ -63,6 +63,12 @@ def _container_instructions(env: Environment) -> list[str]:
             "snapshot, or update an older base image before installing.",
             "   https://docs.aws.amazon.com/linux/al2023/ug/nodejs.html",
             "   https://docs.aws.amazon.com/linux/al2023/ug/managing-repos-os-updates.html",
+        ]
+    if env.linux_distro == "amzn" and env.linux_distro_version == "2":
+        return [
+            "AMAZON LINUX 2 CONTAINER: move to an Amazon Linux 2023 or another Node.js 24 compatible base image.",
+            "Official Node.js 22/24 Linux binaries require newer glibc than Amazon Linux 2 provides.",
+            "   https://docs.aws.amazon.com/linux/al2023/ug/nodejs.html",
         ]
     return [
         "CONTAINER: keep your existing base image and install Node.js 24 with npm during the image build.",
@@ -91,6 +97,12 @@ def _linux_instructions(env: Environment) -> list[str]:
             f"   Without sudo, install nvm: {_NVM}",
             "   Then run: nvm install 24",
         ]
+    if env.linux_distro == "amzn" and env.linux_distro_version == "2":
+        return [
+            "AMAZON LINUX 2: upgrade to Amazon Linux 2023 or run in a Node.js 24 compatible container.",
+            "Official Node.js 22/24 Linux binaries require newer glibc than Amazon Linux 2 provides.",
+            "   https://docs.aws.amazon.com/linux/al2023/ug/nodejs.html",
+        ]
     return [
         "LINUX: use a Node.js version manager or your distribution's instructions for Node.js 24.",
         f"   Install nvm: {_NVM}",
@@ -105,8 +117,10 @@ def get_installation_instructions(env: Environment) -> str:
         f"Install Node.js 24 LTS with npm: {_NODE_DOWNLOAD}",
         "Verify with:",
         "   node --version",
-        "   cmd /d /c npx --version" if env.os_type == "windows" else "   npx --version",
+        "   npx.cmd --version" if env.os_type == "windows" else "   npx --version",
     ]
+    if env.os_type == "windows":
+        lines.append("If your Node manager installs npx.exe instead (such as Volta), use: npx.exe --version")
 
     if env.serverless == "aws":
         lines += [
@@ -119,6 +133,11 @@ def get_installation_instructions(env: Environment) -> str:
             "and install Node at build time.",
             "   https://docs.aws.amazon.com/lambda/latest/dg/images-create.html",
         ]
+        if env.linux_distro == "amzn" and env.linux_distro_version == "2":
+            lines.append(
+                "For an Amazon Linux 2 based function, first upgrade to an Amazon Linux 2023 based Python runtime "
+                "before packaging the official Node.js 22/24 binaries."
+            )
         return "\n".join(lines)
     if env.serverless and env.serverless in _SERVERLESS:
         name, hosting, documentation = _SERVERLESS[env.serverless]

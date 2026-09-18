@@ -12,8 +12,10 @@ def test_every_platform_gets_the_runtime_requirement_and_a_working_fallback(plat
     assert f"requires Node.js {MIN_NODE_VERSION_TEXT} or newer" in output
     assert "Node.js 24 LTS with npm" in output
     assert "https://nodejs.org/en/download" in output
-    npx = "cmd /d /c npx" if platform == "windows" else "npx"
+    npx = "npx.cmd" if platform == "windows" else "npx"
     assert f"   node --version\n   {npx} --version" in output
+    if platform == "windows":
+        assert "use: npx.exe --version" in output
     assert "node --version &&" not in output
     assert "DIRECT USAGE after installing Node.js: npx promptfoo@latest eval" in output
 
@@ -57,13 +59,23 @@ def test_amazon_linux_2023_installs_both_versioned_packages_and_selects_the_acti
     assert "dnf install -y nodejs\n" not in output
 
 
-@pytest.mark.parametrize("version", [None, "2"])
-def test_other_amazon_releases_are_not_given_amazon_linux_2023_commands(version: str | None) -> None:
-    output = get_installation_instructions(
-        Environment(os_type="linux", linux_distro="amzn", linux_distro_version=version)
-    )
+def test_unknown_amazon_release_is_not_given_amazon_linux_2023_commands() -> None:
+    output = get_installation_instructions(Environment(os_type="linux", linux_distro="amzn"))
     assert "nvm install 24" in output
     assert "nodejs24-npm" not in output
+
+
+@pytest.mark.parametrize("container", [False, True])
+def test_amazon_linux_2_recommends_a_compatible_os(container: bool) -> None:
+    output = get_installation_instructions(
+        Environment(os_type="linux", linux_distro="amzn", linux_distro_version="2", is_docker=container)
+    )
+    assert "Amazon Linux 2023" in output
+    assert "require newer glibc" in output
+    assert "nvm install 24" not in output
+    if container:
+        assert "compatible base image" in output
+        assert "keep your existing base image" not in output
 
 
 def test_ci_container_and_wsl_hints_can_coexist() -> None:
@@ -112,6 +124,11 @@ def test_non_bookworm_containers_keep_their_original_base(distribution: str, ver
     if distribution == "amzn":
         assert "/usr/sbin/alternatives --set node" in output
         assert "2023.9.20251110" in output
+    if distribution == "ubuntu":
+        commands = [line for line in output.splitlines() if line.strip().startswith("RUN ")]
+        assert len(commands) == 1
+        assert "apt-get update" in commands[0]
+        assert "rm -rf /var/lib/apt/lists/*" in commands[0]
 
 
 def test_unknown_container_does_not_claim_to_be_bookworm() -> None:
@@ -176,3 +193,10 @@ def test_lambda_zip_can_use_a_layer_or_choose_to_create_an_image_based_function(
     assert "If you choose a container image instead, create a new image-based function" in output
     assert "https://docs.aws.amazon.com/lambda/latest/dg/images-create.html" in output
     assert "sudo" not in output
+
+
+def test_lambda_on_amazon_linux_2_requires_a_compatible_runtime_before_packaging() -> None:
+    output = get_installation_instructions(
+        Environment(os_type="linux", linux_distro="amzn", linux_distro_version="2", is_docker=True, serverless="aws")
+    )
+    assert "first upgrade to an Amazon Linux 2023 based Python runtime" in output
