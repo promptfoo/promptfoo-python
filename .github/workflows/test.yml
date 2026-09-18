@@ -83,10 +83,15 @@ jobs:
 
           for distro in ("alpine", "debian"):
               instructions = get_installation_instructions(
-                  Environment(os_type="linux", linux_distro=distro, is_docker=True)
+                  Environment(os_type="linux", linux_distro=distro,
+                              linux_distro_version="12" if distro == "debian" else None, is_docker=True)
               )
               commands = [line.strip() for line in instructions.splitlines()]
               commands = [command for command in commands if command.startswith(("FROM ", "COPY ", "RUN ", "ENV "))]
+              if distro == "debian":
+                  runtime = next(index for index, command in enumerate(commands) if command.startswith("FROM python:"))
+                  commands.insert(runtime + 1, "RUN python -c 'import pathlib, sysconfig; "
+                                  "(pathlib.Path(sysconfig.get_path(\"purelib\")) / \"promptfoo_help_probe.py\").touch()'")
               directory = Path(sys.argv[1]) / distro
               directory.mkdir(parents=True, exist_ok=True)
               (directory / "Dockerfile").write_text("\n".join(commands) + "\n")
@@ -94,11 +99,12 @@ jobs:
           for distro in alpine debian; do
             cat >> "$instruction_dir/$distro/Dockerfile" <<'EOF'
           RUN node --version | grep -E '^v24\.' \
-              && npm --version && npx --version && python --version && pip --version \
-              && python -c 'import sys; assert sys.prefix == "/opt/venv"'
+              && npm --version && npx --version && python --version && pip --version
           EOF
-            if [ "$distro" = debian ]; then
-              echo 'RUN python -c "import sys; assert sys.version_info[:2] == (3, 12)"' >> "$instruction_dir/$distro/Dockerfile"
+            if [ "$distro" = alpine ]; then
+              echo 'RUN python -c "import sys; assert sys.prefix == \"/opt/venv\""' >> "$instruction_dir/$distro/Dockerfile"
+            else
+              echo 'RUN python -c "import sys, promptfoo_help_probe; assert sys.version_info[:2] == (3, 12)"' >> "$instruction_dir/$distro/Dockerfile"
             fi
             docker build --progress=plain "$instruction_dir/$distro"
           done

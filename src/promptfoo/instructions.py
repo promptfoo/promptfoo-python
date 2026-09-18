@@ -6,11 +6,6 @@ from .node import MIN_NODE_VERSION_TEXT
 _NODE_DOWNLOAD = "https://nodejs.org/en/download"
 _NVM = "https://github.com/nvm-sh/nvm#installing-and-updating"
 _SERVERLESS = {
-    "aws": (
-        "AWS Lambda",
-        "For an existing zip-based function, create a new image-based function.",
-        "https://docs.aws.amazon.com/lambda/latest/dg/images-create.html",
-    ),
     "google": (
         "Google Cloud Functions / Cloud Run",
         "Functions deployed from source, including first-generation functions, must move to a Cloud Run service "
@@ -36,18 +31,37 @@ def _container_instructions(env: Environment) -> list[str]:
             "   RUN python3 -m venv /opt/venv",
             '   ENV PATH="/opt/venv/bin:$PATH"',
         ]
+    if env.linux_distro == "debian" and env.linux_distro_version in ("12", "bookworm"):
+        return [
+            "CONTAINER: add Node.js 24 to your existing Debian Bookworm Python image; this example uses Python 3.12.",
+            "Keep the second FROM set to your existing image and Python environment:",
+            "   FROM node:24-bookworm-slim AS node",
+            "   FROM python:3.12-slim-bookworm",
+            "   COPY --from=node /usr/local/bin/node /usr/local/bin/node",
+            "   COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules",
+            "   RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm "
+            "&& ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx",
+            "   Official Node.js images: https://hub.docker.com/_/node",
+        ]
+    if env.linux_distro == "ubuntu":
+        return [
+            "UBUNTU CONTAINER: keep your existing FROM and install Node.js 24 in place as root:",
+            "   RUN apt-get update && apt-get install -y --no-install-recommends bash ca-certificates curl",
+            "   RUN curl -fsSL https://deb.nodesource.com/setup_24.x -o /tmp/nodesource-setup.sh "
+            "&& bash /tmp/nodesource-setup.sh && rm /tmp/nodesource-setup.sh",
+            "   RUN apt-get install -y --no-install-recommends nodejs && rm -rf /var/lib/apt/lists/*",
+            "   NodeSource's apt repository: https://github.com/nodesource/distributions",
+        ]
+    if env.linux_distro == "amzn" and env.linux_distro_version == "2023":
+        return [
+            "AMAZON LINUX 2023 CONTAINER: keep your existing FROM and install Node.js 24 as root:",
+            "   RUN dnf install -y nodejs24 nodejs24-npm && alternatives --set node /usr/bin/node-24 && dnf clean all",
+            "   https://docs.aws.amazon.com/linux/al2023/ug/nodejs.html",
+        ]
     return [
-        "CONTAINER: add Node.js 24 to your existing Debian Bookworm Python image; this example uses Python 3.12.",
-        "Keep the second FROM set to your application's Python version and use matching Linux distributions:",
-        "   FROM node:24-bookworm-slim AS node",
-        "   FROM python:3.12-slim-bookworm",
-        "   COPY --from=node /usr/local/bin/node /usr/local/bin/node",
-        "   COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules",
-        "   RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm "
-        "&& ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx",
-        "   RUN python -m venv /opt/venv",
-        '   ENV PATH="/opt/venv/bin:$PATH"',
-        "   Official Node.js images: https://hub.docker.com/_/node",
+        "CONTAINER: keep your existing base image and install Node.js 24 with npm during the image build.",
+        "Use installation instructions compatible with your distribution and CPU architecture:",
+        f"   {_NODE_DOWNLOAD}",
     ]
 
 
@@ -86,6 +100,18 @@ def get_installation_instructions(env: Environment) -> str:
         "   npx.cmd --version" if env.os_type == "windows" else "   npx --version",
     ]
 
+    if env.serverless == "aws":
+        lines += [
+            "",
+            "AWS Lambda: include Node.js and npm in a compatible Lambda layer or a custom Python container.",
+            "An existing ZIP function can keep its configuration: attach a layer with Node, npm and npx in /opt/bin.",
+            "Include npm's supporting files and target the function's Amazon Linux version and CPU architecture.",
+            "   https://docs.aws.amazon.com/lambda/latest/dg/packaging-layers.html",
+            "If you choose a container image instead, create a new image-based function "
+            "and install Node at build time.",
+            "   https://docs.aws.amazon.com/lambda/latest/dg/images-create.html",
+        ]
+        return "\n".join(lines)
     if env.serverless and env.serverless in _SERVERLESS:
         name, hosting, documentation = _SERVERLESS[env.serverless]
         lines += [

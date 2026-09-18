@@ -66,20 +66,53 @@ def test_other_amazon_releases_are_not_given_amazon_linux_2023_commands(version:
 
 def test_ci_container_and_wsl_hints_can_coexist() -> None:
     output = get_installation_instructions(
-        Environment(os_type="linux", linux_distro="ubuntu", ci_platform="GitHub Actions", is_docker=True, is_wsl=True)
+        Environment(
+            os_type="linux",
+            linux_distro="debian",
+            linux_distro_version="12",
+            ci_platform="GitHub Actions",
+            is_docker=True,
+            is_wsl=True,
+        )
     )
 
     assert "- uses: actions/setup-node@v7\n     with:\n       node-version: '24'" in output
     assert "FROM node:24-bookworm-slim AS node" in output
     assert "FROM python:3.12-slim-bookworm" in output
-    assert "Keep the second FROM set to your application's Python version" in output
+    assert "Keep the second FROM set to your existing image and Python environment" in output
     assert "COPY --from=node /usr/local/bin/node /usr/local/bin/node" in output
     assert "npm/bin/npx-cli.js /usr/local/bin/npx" in output
-    assert "RUN python -m venv /opt/venv" in output
-    assert 'ENV PATH="/opt/venv/bin:$PATH"' in output
+    assert "venv" not in output
+    assert "ENV PATH" not in output
     assert "nvm install" not in output
     assert "https://hub.docker.com/_/node" in output
     assert "install Node.js inside your Linux distribution" in output
+
+
+@pytest.mark.parametrize(
+    ("distribution", "version", "command"),
+    [
+        ("ubuntu", "24.04", "https://deb.nodesource.com/setup_24.x"),
+        ("amzn", "2023", "dnf install -y nodejs24 nodejs24-npm"),
+    ],
+)
+def test_non_bookworm_containers_keep_their_original_base(distribution: str, version: str, command: str) -> None:
+    output = get_installation_instructions(
+        Environment(os_type="linux", linux_distro=distribution, linux_distro_version=version, is_docker=True)
+    )
+    assert "keep your existing FROM" in output
+    assert command in output
+    assert "FROM python:" not in output
+    assert "bookworm" not in output
+
+
+def test_unknown_container_does_not_claim_to_be_bookworm() -> None:
+    output = get_installation_instructions(
+        Environment(os_type="linux", linux_distro="debian", linux_distro_version="13", is_docker=True)
+    )
+    assert "keep your existing base image" in output
+    assert "distribution and CPU architecture" in output
+    assert "FROM python:" not in output
 
 
 def test_other_ci_uses_the_provider_setup_instructions() -> None:
@@ -91,12 +124,6 @@ def test_other_ci_uses_the_provider_setup_instructions() -> None:
 @pytest.mark.parametrize(
     "provider, label, documentation, hosting",
     [
-        (
-            "aws",
-            "AWS Lambda",
-            "docs.aws.amazon.com/lambda/latest/dg/images-create.html",
-            "create a new image-based function",
-        ),
         (
             "google",
             "Google Cloud Functions / Cloud Run",
@@ -128,3 +155,16 @@ def test_serverless_links_explain_how_to_build_both_runtimes(
     assert "sudo" not in output
     assert "nvm" not in output
     assert "npx promptfoo" not in output
+
+
+def test_lambda_zip_can_use_a_layer_or_choose_to_create_an_image_based_function() -> None:
+    output = get_installation_instructions(
+        Environment(os_type="linux", linux_distro="amzn", linux_distro_version="2023", is_docker=True, serverless="aws")
+    )
+    assert "existing ZIP function can keep its configuration" in output
+    assert "Node, npm and npx in /opt/bin" in output
+    assert "supporting files" in output
+    assert "https://docs.aws.amazon.com/lambda/latest/dg/packaging-layers.html" in output
+    assert "If you choose a container image instead, create a new image-based function" in output
+    assert "https://docs.aws.amazon.com/lambda/latest/dg/images-create.html" in output
+    assert "sudo" not in output
