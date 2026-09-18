@@ -42,14 +42,16 @@ def _container_instructions(env: Environment) -> list[str]:
             "Run these build steps as root; restore your original USER afterward if needed.",
             f"   FROM node:24-{debian_release}-slim AS node",
             f"   FROM python:3.12-slim-{debian_release}",
-            "   COPY --from=node /usr/local/bin/node /usr/local/bin/node",
-            "   COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules",
-            "   RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm "
-            "&& ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx",
-            "   RUN ln -sf /usr/local/bin/node /usr/bin/node && ln -sf /usr/local/bin/npm /usr/bin/npm "
-            "&& ln -sf /usr/local/bin/npx /usr/bin/npx && mkdir -p /opt/npm-global",
-            '   ENV NPM_CONFIG_PREFIX="/opt/npm-global"',
-            '   ENV PATH="${PATH}:/usr/local/bin:/opt/npm-global/bin"',
+            "   COPY --from=node /usr/local/bin/node /usr/bin/node",
+            "   COPY --from=node /usr/local/lib/node_modules /usr/lib/node_modules",
+            "   RUN ln -sf /usr/lib/node_modules/npm/bin/npm-cli.js /usr/bin/npm "
+            "&& ln -sf /usr/lib/node_modules/npm/bin/npx-cli.js /usr/bin/npx",
+            '   ENV PATH="${PATH}:/usr/local/bin"',
+            "The default npm global prefix is /usr; the Python image installs scripts in /usr/local/bin.",
+            "Keep any existing writable npm prefix. If its bin is missing from PATH, add it before /usr/bin "
+            "and after your Python scripts (for example /opt/venv/bin or /usr/local/bin).",
+            "A non-root user without a writable prefix can configure one with "
+            "`npm config set prefix ~/.npm-global` and add that bin directory to PATH in the same order.",
             "   Official Node.js images: https://hub.docker.com/_/node",
         ]
     if env.linux_distro == "ubuntu":

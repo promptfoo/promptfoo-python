@@ -94,14 +94,15 @@ def test_ci_container_and_wsl_hints_can_coexist() -> None:
     assert "FROM node:24-bookworm-slim AS node" in output
     assert "FROM python:3.12-slim-bookworm" in output
     assert "Keep the second FROM set to your existing image and Python environment" in output
-    assert "COPY --from=node /usr/local/bin/node /usr/local/bin/node" in output
-    assert "npm/bin/npx-cli.js /usr/local/bin/npx" in output
-    assert "/usr/local/bin/node /usr/bin/node" in output
-    assert "/usr/local/bin/npm /usr/bin/npm" in output
-    assert "/usr/local/bin/npx /usr/bin/npx" in output
-    assert "venv" not in output
-    assert 'ENV NPM_CONFIG_PREFIX="/opt/npm-global"' in output
-    assert 'ENV PATH="${PATH}:/usr/local/bin:/opt/npm-global/bin"' in output
+    assert "COPY --from=node /usr/local/bin/node /usr/bin/node" in output
+    assert "COPY --from=node /usr/local/lib/node_modules /usr/lib/node_modules" in output
+    assert "npm/bin/npm-cli.js /usr/bin/npm" in output
+    assert "npm/bin/npx-cli.js /usr/bin/npx" in output
+    assert 'ENV PATH="${PATH}:/usr/local/bin"' in output
+    assert "NPM_CONFIG_PREFIX" not in output
+    assert "Keep any existing writable npm prefix" in output
+    assert "add it before /usr/bin and after your Python scripts" in output
+    assert "npm config set prefix ~/.npm-global" in output
     assert "nvm install" not in output
     assert "https://hub.docker.com/_/node" in output
     assert "install Node.js inside your Linux distribution" in output
@@ -140,8 +141,8 @@ def test_trixie_container_uses_matching_supported_node_and_python_images() -> No
     assert "FROM node:24-trixie-slim AS node" in output
     assert "FROM python:3.12-slim-trixie" in output
     assert "/usr/local/bin/node /usr/bin/node" in output
-    assert 'ENV NPM_CONFIG_PREFIX="/opt/npm-global"' in output
-    assert 'ENV PATH="${PATH}:/usr/local/bin:/opt/npm-global/bin"' in output
+    assert 'ENV PATH="${PATH}:/usr/local/bin"' in output
+    assert "NPM_CONFIG_PREFIX" not in output
     assert "bookworm" not in output
 
 

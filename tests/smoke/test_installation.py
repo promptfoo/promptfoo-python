@@ -83,9 +83,10 @@ def test_windows_verification_commands_run_in_git_bash() -> None:
 @pytest.mark.skipif(sys.platform != "win32", reason="Tests native Windows executable lookup")
 @pytest.mark.parametrize("shell", ["powershell", "git-bash"])
 def test_windows_npx_executable_alternative_works_in_each_shell(tmp_path: Path, shell: str) -> None:
-    node = shutil.which("node")
-    assert node
-    shutil.copy2(node, tmp_path / "npx.exe")
+    launcher = shutil.which("node")
+    assert launcher
+    node = subprocess.run([launcher, "-p", "process.execPath"], capture_output=True, text=True, check=True, timeout=20)
+    shutil.copy2(node.stdout.strip(), tmp_path / "npx.exe")
     command = windows_verification_commands("npx.exe")[1]
     if shell == "powershell":
         powershell = shutil.which("powershell")
