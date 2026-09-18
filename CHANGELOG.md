@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0](https://github.com/promptfoo/promptfoo-python/compare/promptfoo-v0.1.4...promptfoo-v0.2.0) (2026-09-18)
+
+
+### ⚠ BREAKING CHANGES
+
+* Node.js 22.22.0 or newer is now required. Node.js 20 and earlier Node.js 22 releases are no longer supported; Node.js 24 LTS is recommended.
+* Python 3.10 or newer is now required. Python 3.9 is no longer supported.
+
+### Bug Fixes
+
+* address telemetry and environment quality findings ([#50](https://github.com/promptfoo/promptfoo-python/issues/50)) ([9fd19f6](https://github.com/promptfoo/promptfoo-python/commit/9fd19f6426c769bfa57a24a8ad9bc2d8d686d9a0))
+* require Node.js 22.22 and repair CI ([#58](https://github.com/promptfoo/promptfoo-python/issues/58)) ([c64ea92](https://github.com/promptfoo/promptfoo-python/commit/c64ea92331aa27f24ad036091ae99761a9c93397))
+* resolve environment test quality findings ([#45](https://github.com/promptfoo/promptfoo-python/issues/45)) ([879bb2a](https://github.com/promptfoo/promptfoo-python/commit/879bb2ab530ef2a0b23f4773d8e32800b86d047e))
+
+
+### Miscellaneous Chores
+
+* drop Python 3.9 support ([9750814](https://github.com/promptfoo/promptfoo-python/commit/9750814770d1416e00b0e91bff9747b56ac80a86))
+
 ## [0.1.4](https://github.com/promptfoo/promptfoo-python/compare/promptfoo-v0.1.3...promptfoo-v0.1.4) (2026-04-04)
 
 
