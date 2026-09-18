@@ -100,7 +100,7 @@ def test_ci_container_and_wsl_hints_can_coexist() -> None:
     assert "/usr/local/bin/npm /usr/bin/npm" in output
     assert "/usr/local/bin/npx /usr/bin/npx" in output
     assert "venv" not in output
-    assert "ENV PATH" not in output
+    assert 'ENV PATH="${PATH}:/usr/local/bin"' in output
     assert "nvm install" not in output
     assert "https://hub.docker.com/_/node" in output
     assert "install Node.js inside your Linux distribution" in output
@@ -139,6 +139,7 @@ def test_trixie_container_uses_matching_supported_node_and_python_images() -> No
     assert "FROM node:24-trixie-slim AS node" in output
     assert "FROM python:3.12-slim-trixie" in output
     assert "/usr/local/bin/node /usr/bin/node" in output
+    assert 'ENV PATH="${PATH}:/usr/local/bin"' in output
     assert "bookworm" not in output
 
 
@@ -191,6 +192,9 @@ def test_serverless_links_explain_how_to_build_both_runtimes(
     assert "sudo" not in output
     assert "nvm" not in output
     assert "npx promptfoo" not in output
+    if provider == "azure":
+        assert "Select that hosting environment in the documentation" in output
+        assert "?pivots=" not in output
 
 
 def test_lambda_zip_can_use_a_layer_or_choose_to_create_an_image_based_function() -> None:

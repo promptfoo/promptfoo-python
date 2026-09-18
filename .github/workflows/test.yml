@@ -92,6 +92,7 @@ jobs:
                   runtime = next(index for index, command in enumerate(commands) if command.startswith("FROM python:"))
                   commands.insert(runtime + 1, "RUN python -c 'import pathlib, sysconfig; "
                                   "(pathlib.Path(sysconfig.get_path(\"purelib\")) / \"promptfoo_help_probe.py\").touch()'")
+                  commands.insert(runtime + 2, 'ENV PATH="/opt/venv/bin:/usr/bin:/bin"')
               directory = Path(sys.argv[1]) / distro
               directory.mkdir(parents=True, exist_ok=True)
               (directory / "Dockerfile").write_text("\n".join(commands) + "\n")
@@ -106,6 +107,7 @@ jobs:
             else
               echo 'RUN python -c "import sys, promptfoo_help_probe; assert sys.version_info[:2] == (3, 12)"' >> "$instruction_dir/$distro/Dockerfile"
               echo 'RUN env PATH=/opt/venv/bin:/usr/bin:/bin sh -c "node --version && npm --version && npx --version"' >> "$instruction_dir/$distro/Dockerfile"
+              echo 'RUN prefix="$(npm prefix --global)" && case ":$PATH:" in *":$prefix/bin:"*) ;; *) exit 1 ;; esac' >> "$instruction_dir/$distro/Dockerfile"
             fi
             docker build --progress=plain "$instruction_dir/$distro"
           done

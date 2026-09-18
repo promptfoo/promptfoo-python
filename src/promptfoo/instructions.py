@@ -15,9 +15,9 @@ _SERVERLESS = {
     "azure": (
         "Azure Functions",
         "Consumption and Flex Consumption do not accept custom images. Move to Azure Container Apps "
-        "or a Linux Premium/Dedicated plan. On Kubernetes, keep the Azure Functions base image and add Node.",
-        "https://learn.microsoft.com/en-us/azure/azure-functions/functions-how-to-custom-container"
-        "?pivots=programming-language-python",
+        "or a Linux Premium/Dedicated plan. Select that hosting environment in the documentation. "
+        "On Kubernetes, keep the Azure Functions base image and add Node.",
+        "https://learn.microsoft.com/en-us/azure/azure-functions/functions-how-to-custom-container",
     ),
 }
 
@@ -47,6 +47,7 @@ def _container_instructions(env: Environment) -> list[str]:
             "&& ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx",
             "   RUN ln -sf /usr/local/bin/node /usr/bin/node && ln -sf /usr/local/bin/npm /usr/bin/npm "
             "&& ln -sf /usr/local/bin/npx /usr/bin/npx",
+            '   ENV PATH="${PATH}:/usr/local/bin"',
             "   Official Node.js images: https://hub.docker.com/_/node",
         ]
     if env.linux_distro == "ubuntu":
