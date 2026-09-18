@@ -68,6 +68,41 @@ jobs:
       - name: Check GitHub workflows
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 
+      - name: Verify Alpine installation instructions
+        run: |
+          alpine_dir="$RUNNER_TEMP/promptfoo-alpine"
+          mkdir -p "$alpine_dir"
+          uv run python - <<'PY' > "$alpine_dir/Dockerfile"
+          from promptfoo.environment import Environment
+          from promptfoo.instructions import get_installation_instructions
+
+          instructions = get_installation_instructions(
+              Environment(os_type="linux", linux_distro="alpine", is_docker=True)
+          )
+          for line in instructions.splitlines():
+              command = line.strip()
+              if command.startswith(("FROM ", "RUN ", "ENV ")):
+                  print(command)
+          PY
+          cat >> "$alpine_dir/Dockerfile" <<'EOF'
+          RUN node --version | grep -E '^v24\.' \
+              && npm --version && npx --version && python --version && pip --version \
+              && python -c 'import sys; assert sys.prefix == "/opt/venv"'
+          EOF
+          docker build --progress=plain "$alpine_dir"
+          docker run --rm alpine:3.20 sh -ec '
+            apk update
+            apk add --no-cache nodejs npm
+            case "$(node --version)" in
+              v20.*) ;;
+              *) echo "Expected Alpine 3.20 to supply Node.js 20" >&2; exit 1 ;;
+            esac
+            if apk add --no-cache "nodejs~24" npm; then
+              echo "Alpine 3.20 unexpectedly installed Node.js 24" >&2
+              exit 1
+            fi
+          '
+
   type-check:
     name: Type Check (${{ matrix.type-checker }})
     runs-on: ubuntu-latest
