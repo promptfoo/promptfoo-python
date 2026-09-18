@@ -94,11 +94,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * add comprehensive agent documentation ([#8](https://github.com/promptfoo/promptfoo-python/issues/8)) ([a6037ff](https://github.com/promptfoo/promptfoo-python/commit/a6037ff57c6bd7093f5b531456ead0cd0ab22dbd))
 
-## [Unreleased]
+### Initial wrapper details
 
-## [0.2.0] - 2026-01-05
+The January 5 wrapper rewrite was first released in 0.1.1 on January 6.
 
-### Added
+#### Added
 
 - Complete rewrite of the Python wrapper with actual working code
 - Automatic detection of Node.js and npx availability
@@ -108,12 +108,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Proper exit code handling
 - Graceful Ctrl+C handling
 
-### Changed
+#### Changed
 
 - Now calls `npx promptfoo@latest` to always use the latest version
 - Improved README with clear installation and usage instructions
 
-### Fixed
+#### Fixed
 
 - Package now actually works (previous version was non-functional)
 - Proper module structure with `__init__.py` and `cli.py`
