@@ -51,7 +51,7 @@ git push  # This bypasses PR review!
 
 All commits must follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
 
-- `feat:` - New feature (bumps minor version pre-1.0.0)
+- `feat:` - New feature (bumps the patch version while the project is pre-1.0.0)
 - `fix:` - Bug fix (bumps patch version)
 - `docs:` - Documentation changes
 - `chore:` - Maintenance tasks
@@ -101,11 +101,13 @@ This repository uses **release-please** for automated releases.
 
 We're currently pre-1.0.0, which uses special semver rules:
 
-- `fix:` commits → **minor** version bump (0.2.0 → 0.3.0)
-- `feat:` commits → **minor** version bump (0.2.0 → 0.3.0)
-- `BREAKING CHANGE:` → **major** version bump (0.2.0 → 1.0.0)
+- `fix:` commits → **patch** version bump (0.2.0 → 0.2.1)
+- `feat:` commits → **patch** version bump (0.2.0 → 0.2.1)
+- Breaking commits (`type!:` or a `BREAKING CHANGE:` footer) → **minor** version bump (0.2.0 → 0.3.0)
 
-This is configured via `bump-patch-for-minor-pre-major: true` in `release-please-config.json`.
+This is configured by both `bump-minor-pre-major: true` and `bump-patch-for-minor-pre-major: true`
+in `release-please-config.json`. See the [release-please versioning options](https://github.com/googleapis/release-please/blob/main/docs/cli.md#creatingupdating-release-prs)
+for their behavior before 1.0.0.
 
 ### Release Configuration Files
 
