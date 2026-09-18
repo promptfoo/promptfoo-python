@@ -51,9 +51,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
-          enable-cache: true
+          version: "0.12.17"
+          enable-cache: auto
 
       - name: Pin Python version
         run: uv python pin 3.12
@@ -117,9 +118,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
-          enable-cache: true
+          version: "0.12.17"
+          enable-cache: auto
 
       - name: Pin Python version
         run: uv python pin 3.12
@@ -182,9 +184,10 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=4096
 
-      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
-          enable-cache: true
+          version: "0.12.17"
+          enable-cache: auto
 
       - name: Pin Python version
         run: uv python pin ${{ matrix.python-version }}
@@ -246,9 +249,10 @@ jobs:
       # Intentionally skip installing promptfoo globally
       # This tests the npx fallback path
 
-      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
-          enable-cache: true
+          version: "0.12.17"
+          enable-cache: auto
 
       - name: Pin Python version
         run: uv python pin ${{ matrix.python-version }}
@@ -280,9 +284,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
-          enable-cache: true
+          version: "0.12.17"
+          enable-cache: auto
 
       - name: Pin Python version
         run: uv python pin 3.12
