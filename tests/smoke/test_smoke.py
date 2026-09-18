@@ -10,8 +10,8 @@ These tests run against the installed promptfoo package via the Python wrapper
 
 import json
 import os
-import shutil
 import subprocess
+import sysconfig
 from collections.abc import Generator
 from pathlib import Path
 from typing import Optional
@@ -25,7 +25,7 @@ pytestmark = pytest.mark.smoke
 SMOKE_DIR = Path(__file__).parent
 FIXTURES_DIR = SMOKE_DIR / "fixtures"
 CONFIGS_DIR = FIXTURES_DIR / "configs"
-OUTPUT_DIR = SMOKE_DIR / ".temp-output"
+WRAPPER = Path(sysconfig.get_path("scripts")) / ("promptfoo.exe" if os.name == "nt" else "promptfoo")
 
 
 def run_promptfoo(
@@ -48,7 +48,7 @@ def run_promptfoo(
     Returns:
         Tuple of (stdout, stderr, exit_code)
     """
-    cmd = ["promptfoo"] + args
+    cmd = [str(WRAPPER)] + args
 
     full_env = os.environ.copy()
     full_env["NO_COLOR"] = "1"  # Disable color output for easier parsing
@@ -83,16 +83,17 @@ def run_promptfoo(
 
 
 @pytest.fixture(scope="module", autouse=True)
-def setup_and_teardown() -> Generator[None, None, None]:
-    """Create and cleanup output directory for smoke tests."""
-    OUTPUT_DIR.mkdir(exist_ok=True)
-    yield
-    if OUTPUT_DIR.exists():
-        shutil.rmtree(OUTPUT_DIR)
+def isolate_promptfoo(tmp_path_factory: pytest.TempPathFactory) -> Generator[None, None, None]:
+    """Keep settings, evaluations and telemetry away from the developer or runner's home."""
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setenv("PROMPTFOO_CONFIG_DIR", str(tmp_path_factory.mktemp("promptfoo-config")))
+        monkeypatch.setenv("PROMPTFOO_DISABLE_TELEMETRY", "1")
+        monkeypatch.setenv("PROMPTFOO_DISABLE_UPDATE", "1")
+        yield
 
 
 @pytest.fixture(scope="module", autouse=True)
-def warmup_npx() -> Generator[None, None, None]:
+def warmup_npx(isolate_promptfoo: None) -> None:
     """
     Warm up npx by running promptfoo --version before all tests.
 
@@ -100,22 +101,17 @@ def warmup_npx() -> Generator[None, None, None]:
     downloads and caches promptfoo, which can take several minutes on Windows.
     Running this warmup prevents the first actual test from timing out.
     """
-    # Run with a longer timeout (5 minutes) for the initial npx download
+    assert WRAPPER.is_file(), f"Python console script was not installed at {WRAPPER}"
     try:
-        subprocess.run(
-            ["promptfoo", "--version"],
-            capture_output=True,
-            timeout=300,  # 5 minutes for initial npx download
-            encoding="utf-8",
-            errors="replace",
+        stdout, stderr, exit_code = run_promptfoo(["--version"], timeout=300)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        pytest.fail(f"Python wrapper could not start promptfoo during warmup: {error}")
+
+    if exit_code != 0 or not stdout.strip():
+        pytest.fail(
+            f"Python wrapper could not start promptfoo during warmup (exit {exit_code}).\n"
+            f"STDOUT:\n{stdout}\nSTDERR:\n{stderr}"
         )
-    except subprocess.TimeoutExpired:
-        # If warmup times out, tests will likely fail but let them run anyway
-        pass
-    except FileNotFoundError:
-        # promptfoo not installed, tests will fail but let them try
-        pass
-    yield
 
 
 class TestBasicCLI:
@@ -190,10 +186,10 @@ class TestEvalCommand:
         # Should show evaluation results
         assert "pass" in stdout.lower() or "✓" in stdout or "success" in stdout.lower()
 
-    def test_json_output(self) -> None:
+    def test_json_output(self, tmp_path: Path) -> None:
         """Test eval outputs valid JSON."""
         config_path = CONFIGS_DIR / "basic.yaml"
-        output_path = OUTPUT_DIR / "output.json"
+        output_path = tmp_path / "output.json"
 
         stdout, stderr, exit_code = run_promptfoo(
             ["eval", "-c", str(config_path), "-o", str(output_path), "--no-cache"]
@@ -203,7 +199,7 @@ class TestEvalCommand:
         assert output_path.exists(), "Output file was not created"
 
         # Verify it's valid JSON with expected structure
-        with open(output_path) as f:
+        with open(output_path, encoding="utf-8") as f:
             data = json.load(f)
 
         assert "results" in data
@@ -219,10 +215,10 @@ class TestEvalCommand:
         assert "Hello" in output_text
         assert "World" in output_text
 
-    def test_yaml_output(self) -> None:
+    def test_yaml_output(self, tmp_path: Path) -> None:
         """Test eval outputs YAML format."""
         config_path = CONFIGS_DIR / "basic.yaml"
-        output_path = OUTPUT_DIR / "output.yaml"
+        output_path = tmp_path / "output.yaml"
 
         stdout, stderr, exit_code = run_promptfoo(
             ["eval", "-c", str(config_path), "-o", str(output_path), "--no-cache"]
@@ -232,15 +228,15 @@ class TestEvalCommand:
         assert output_path.exists()
 
         # Verify it contains YAML-like content
-        with open(output_path) as f:
+        with open(output_path, encoding="utf-8") as f:
             content = f.read()
 
         assert "results:" in content
 
-    def test_csv_output(self) -> None:
+    def test_csv_output(self, tmp_path: Path) -> None:
         """Test eval outputs CSV format."""
         config_path = CONFIGS_DIR / "basic.yaml"
-        output_path = OUTPUT_DIR / "output.csv"
+        output_path = tmp_path / "output.csv"
 
         stdout, stderr, exit_code = run_promptfoo(
             ["eval", "-c", str(config_path), "-o", str(output_path), "--no-cache"]
@@ -250,7 +246,7 @@ class TestEvalCommand:
         assert output_path.exists()
 
         # Verify it's CSV format (has header row with columns)
-        with open(output_path) as f:
+        with open(output_path, encoding="utf-8") as f:
             content = f.read()
 
         lines = content.strip().split("\n")
@@ -268,10 +264,10 @@ class TestEvalCommand:
 
         assert exit_code == 0
 
-    def test_repeat_flag(self) -> None:
+    def test_repeat_flag(self, tmp_path: Path) -> None:
         """Test --repeat flag runs tests multiple times."""
         config_path = CONFIGS_DIR / "basic.yaml"
-        output_path = OUTPUT_DIR / "repeat-output.json"
+        output_path = tmp_path / "repeat-output.json"
 
         stdout, stderr, exit_code = run_promptfoo(
             [
@@ -289,7 +285,7 @@ class TestEvalCommand:
         assert exit_code == 0
 
         # Verify we got repeated results
-        with open(output_path) as f:
+        with open(output_path, encoding="utf-8") as f:
             data = json.load(f)
 
         # With repeat=2 and 1 test case, we should have 2 results
@@ -342,10 +338,10 @@ class TestExitCodes:
 class TestEchoProvider:
     """Echo provider smoke tests."""
 
-    def test_echo_provider_basic(self) -> None:
+    def test_echo_provider_basic(self, tmp_path: Path) -> None:
         """Test echo provider returns the prompt."""
         config_path = CONFIGS_DIR / "basic.yaml"
-        output_path = OUTPUT_DIR / "echo-test.json"
+        output_path = tmp_path / "echo-test.json"
 
         stdout, stderr, exit_code = run_promptfoo(
             ["eval", "-c", str(config_path), "-o", str(output_path), "--no-cache"]
@@ -354,7 +350,7 @@ class TestEchoProvider:
         assert exit_code == 0
 
         # Verify echo provider returns the prompt
-        with open(output_path) as f:
+        with open(output_path, encoding="utf-8") as f:
             data = json.load(f)
 
         first_result = data["results"]["results"][0]
@@ -364,10 +360,10 @@ class TestEchoProvider:
         assert "Hello" in output
         assert "World" in output
 
-    def test_echo_provider_with_multiple_vars(self) -> None:
+    def test_echo_provider_with_multiple_vars(self, tmp_path: Path) -> None:
         """Test echo provider with multiple variables."""
         config_path = CONFIGS_DIR / "assertions.yaml"
-        output_path = OUTPUT_DIR / "echo-multi-var.json"
+        output_path = tmp_path / "echo-multi-var.json"
 
         stdout, stderr, exit_code = run_promptfoo(
             ["eval", "-c", str(config_path), "-o", str(output_path), "--no-cache"]
@@ -375,7 +371,7 @@ class TestEchoProvider:
 
         assert exit_code == 0
 
-        with open(output_path) as f:
+        with open(output_path, encoding="utf-8") as f:
             data = json.load(f)
 
         first_result = data["results"]["results"][0]
