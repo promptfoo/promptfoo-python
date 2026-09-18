@@ -8,14 +8,14 @@ This document provides comprehensive guidance for AI agents and developers worki
 
 - **Primary Purpose**: Enable pip-based installation of promptfoo for Python-centric environments
 - **Implementation**: Thin wrapper that delegates to the official TypeScript promptfoo package
-- **Requirements**: Python 3.10+ and Node.js 20+
+- **Requirements**: Python 3.10+ and Node.js 22.22.0 or newer (Node.js 24 LTS recommended)
 
 ### How It Works
 
 1. User installs via `pip install promptfoo`
 2. User runs `promptfoo eval` (or any promptfoo command)
 3. The Python wrapper (`src/promptfoo/cli.py`):
-   - Checks if Node.js/npx is available
+   - Checks that a supported Node.js version is available and detects npx when needed
    - Detects if promptfoo is globally installed
    - Falls back to `npx promptfoo@latest` if needed
    - Prevents recursive wrapper calls
@@ -90,7 +90,7 @@ This repository uses **release-please** for automated releases.
 2. **Release-please analyzes commits** and creates/updates a release PR
 3. **Review the release PR** - It will contain:
    - Updated `CHANGELOG.md`
-   - Version bump in `pyproject.toml` and `.release-please-manifest.json`
+   - Version bump in `pyproject.toml`, `src/promptfoo/__init__.py`, `uv.lock`, and `.release-please-manifest.json`
    - Generated release notes
 4. **Merge the release PR** - This triggers:
    - GitHub release creation with tag
@@ -111,7 +111,7 @@ This is configured via `bump-patch-for-minor-pre-major: true` in `release-please
 
 - **`release-please-config.json`**: Main configuration for release-please
   - Defines release type (python)
-  - Specifies extra files to update (pyproject.toml)
+  - Specifies `uv.lock` as an extra file to update; the Python strategy updates `pyproject.toml` and `src/promptfoo/__init__.py`
   - Sets versioning behavior
 - **`.release-please-manifest.json`**: Tracks the last released version
   - Format: `{ ".": "0.2.0" }`
@@ -141,13 +141,13 @@ Runs on every PR and push to main:
 - **Smoke Tests**: Integration tests against real CLI (`uv run pytest tests/smoke/`)
 - **Build**: Package build validation
 
-Tests run on multiple Python versions (3.10, 3.14) and OSes (Ubuntu, Windows).
+Tests run on multiple Python versions (3.10, 3.14) and OSes (Ubuntu, Windows), with Node.js 22.22.0 and 24.
 
 ### Release Workflow (`.github/workflows/release-please.yml`)
 
 Triggered on push to main:
 
-1. **release-please job**: Creates/updates release PR
+1. **release-please job**: Creates/updates release PR and dispatches its required Python CI workflow
 2. **build job**: (on release PR merge)
    - Builds Python package with `uv build`
    - Verifies package version matches release
@@ -191,7 +191,7 @@ We use **OpenID Connect (OIDC)** for secure, credential-free PyPI publishing:
 
 ```bash
 # Install dependencies
-uv sync --extra dev
+uv sync --locked --extra dev
 
 # Run linter
 uv run ruff check src/
@@ -265,13 +265,14 @@ tests/
 CI tests across:
 - **Operating Systems**: Ubuntu, Windows (macOS temporarily excluded due to runner constraints)
 - **Python Versions**: 3.10 (min), 3.14 (max)
+- **Node.js Versions**: 22.22.0 (minimum) and 24 (LTS)
 - **Scenarios**: Global promptfoo install vs. npx fallback
 
 ### Running Tests
 
 ```bash
 # Install dependencies with dev extras
-uv sync --extra dev
+uv sync --locked --extra dev
 
 # Run all tests (unit + smoke)
 uv run pytest
@@ -301,7 +302,7 @@ Smoke tests verify critical CLI functionality:
 - **Echo Provider**: Variable substitution, multiple variables
 - **Assertions**: `contains`, `icontains`, failing assertions
 
-The smoke tests use a 120-second timeout to accommodate the first `npx` call which downloads promptfoo.
+The smoke tests allow up to five minutes for the initial `npx` download and use a 120-second timeout for individual commands.
 
 ## Security Practices
 

@@ -5,6 +5,7 @@ Generates tailored installation instructions based on the detected environment.
 """
 
 from .environment import Environment
+from .node import MIN_NODE_VERSION_TEXT
 
 
 def get_installation_instructions(env: Environment) -> str:
@@ -19,8 +20,9 @@ def get_installation_instructions(env: Environment) -> str:
     """
     lines = []
     lines.append("=" * 70)
-    lines.append("ERROR: promptfoo requires Node.js but it's not installed")
+    lines.append(f"ERROR: promptfoo requires Node.js {MIN_NODE_VERSION_TEXT} or newer but it's not installed")
     lines.append("=" * 70)
+    lines.append("Install a supported version and verify it with: node --version")
     lines.append("")
 
     # Special cases first (Lambda, Cloud Functions, etc.)
@@ -116,27 +118,27 @@ def _get_ci_instructions(env: Environment) -> list[str]:
         lines.extend(
             [
                 "Add Node.js to your workflow:",
-                "   - uses: actions/setup-node@v4",
+                "   - uses: actions/setup-node@v7",
                 "     with:",
-                "       node-version: '20'",
+                "       node-version: '24'",
             ]
         )
     elif env.ci_platform == "gitlab":
         lines.extend(
             [
                 "Use a Docker image with Node.js:",
-                "   image: node:20",
-                "Or install Node.js in before_script:",
-                "   before_script:",
-                "     - apt-get update && apt-get install -y nodejs npm",
+                "   image: node:24",
             ]
         )
     elif env.ci_platform == "circleci":
         lines.extend(
             [
-                "Use a CircleCI image with Node.js:",
-                "   docker:",
-                "     - image: cimg/python:3.11-node",
+                "Use the CircleCI Node orb with your Python image:",
+                "   orbs:",
+                "     node: circleci/node@5",
+                "   # Add under your job's steps:",
+                "   - node/install:",
+                "       node-version: '24'",
             ]
         )
     else:
@@ -165,12 +167,8 @@ def _get_docker_instructions(env: Environment) -> list[str]:
         lines.extend(
             [
                 "Add to your Dockerfile (Debian/Ubuntu):",
-                "   RUN apt-get update && \\",
-                "       apt-get install -y nodejs npm && \\",
-                "       rm -rf /var/lib/apt/lists/*",
-                "",
-                "Or use NodeSource for newer version:",
-                "   RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \\",
+                "   RUN apt-get update && apt-get install -y ca-certificates curl && \\",
+                "       curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \\",
                 "       apt-get install -y nodejs && \\",
                 "       rm -rf /var/lib/apt/lists/*",
             ]
@@ -178,9 +176,10 @@ def _get_docker_instructions(env: Environment) -> list[str]:
     else:
         lines.extend(
             [
-                "Add Node.js to your Dockerfile:",
-                "   FROM python:3.11",
-                "   RUN apt-get update && apt-get install -y nodejs npm",
+                "Use matching Debian-based Node.js and Python stages in your Dockerfile:",
+                "   FROM node:24-bookworm-slim AS node",
+                "   FROM python:3.12-slim-bookworm",
+                "   COPY --from=node /usr/local/ /usr/local/",
             ]
         )
 
@@ -200,7 +199,7 @@ def _get_wsl_instructions() -> list[str]:
         "   2. Or use nvm for version management:",
         "      curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash",
         "      source ~/.bashrc",
-        "      nvm install 20",
+        "      nvm install 24",
         "",
         "Tips for WSL:",
         "   - Store project files in the WSL filesystem (~/), not /mnt/c/",
@@ -239,10 +238,10 @@ def _get_debian_instructions(env: Environment) -> list[str]:
         lines.extend(
             [
                 "Option 1 - Install from NodeSource (recommended for production):",
-                "   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -",
+                "   curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -",
                 "   sudo apt install -y nodejs",
                 "",
-                "Option 2 - Install from default repository (may be outdated):",
+                "Option 2 - Use the default repository only if it supplies a supported version:",
                 "   sudo apt update",
                 "   sudo apt install -y nodejs npm",
                 "",
@@ -257,7 +256,7 @@ def _get_debian_instructions(env: Environment) -> list[str]:
                 "You don't have sudo access. Use nvm (Node Version Manager):",
                 "   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash",
                 "   source ~/.bashrc",
-                "   nvm install 20",
+                "   nvm install 24",
             ]
         )
 
@@ -282,7 +281,7 @@ def _get_rhel_instructions(env: Environment) -> list[str]:
                     "   sudo dnf install -y nodejs",
                     "",
                     "Amazon Linux 2:",
-                    "   curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -",
+                    "   curl -fsSL https://rpm.nodesource.com/setup_24.x | sudo bash -",
                     "   sudo yum install -y nodejs",
                 ]
             )
@@ -292,7 +291,7 @@ def _get_rhel_instructions(env: Environment) -> list[str]:
                     "Use nvm (Node Version Manager) - no sudo needed:",
                     "   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash",
                     "   source ~/.bashrc",
-                    "   nvm install 20",
+                    "   nvm install 24",
                 ]
             )
     else:
@@ -307,7 +306,7 @@ def _get_rhel_instructions(env: Environment) -> list[str]:
                     "   sudo yum install -y nodejs npm",
                     "",
                     "Or use NodeSource for newer version:",
-                    "   curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -",
+                    "   curl -fsSL https://rpm.nodesource.com/setup_24.x | sudo bash -",
                     "   sudo yum install -y nodejs",
                 ]
             )
@@ -317,7 +316,7 @@ def _get_rhel_instructions(env: Environment) -> list[str]:
                     "Use nvm (Node Version Manager) - no sudo needed:",
                     "   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash",
                     "   source ~/.bashrc",
-                    "   nvm install 20",
+                    "   nvm install 24",
                 ]
             )
 
@@ -364,7 +363,7 @@ def _get_generic_linux_instructions() -> list[str]:
         "Option 1 - nvm (Node Version Manager, works on any Linux):",
         "   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash",
         "   source ~/.bashrc",
-        "   nvm install 20",
+        "   nvm install 24",
         "",
         "Option 2 - Download binary from https://nodejs.org/",
     ]
@@ -381,7 +380,7 @@ def _get_macos_instructions() -> list[str]:
         "Option 2 - nvm (Node Version Manager, for version management):",
         "   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash",
         "   source ~/.zshrc  # or ~/.bashrc",
-        "   nvm install 20",
+        "   nvm install 24",
         "",
         "Option 3 - Official installer:",
         "   Download from https://nodejs.org/",

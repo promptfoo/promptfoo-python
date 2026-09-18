@@ -20,6 +20,7 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
       pull-requests: write
     outputs:
@@ -32,6 +33,22 @@ jobs:
         if: github.event_name == 'push'
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run CI for release PRs opened or updated with the workflow token
+        if: steps.release.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_PRS: ${{ steps.release.outputs.prs }}
+        run: |
+          branches=$(jq -er 'map(.headBranchName) | unique | .[]' <<< "$RELEASE_PRS")
+          while IFS= read -r branch; do
+            case "$branch" in
+              release-please--*) ;;
+              *) echo "Unexpected release PR branch: $branch" >&2; exit 1 ;;
+            esac
+            gh workflow run test.yml --ref "$branch"
+          done <<< "$branches"
 
   build:
     if: |
@@ -54,7 +71,15 @@ jobs:
         run: uv python pin 3.12
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        env:
+          REPUBLISH_TAG: ${{ inputs.tag }}
+        run: |
+          if [[ -n "$REPUBLISH_TAG" ]]; then
+            # Historical tags predate keeping the package version in uv.lock in sync.
+            uv sync --extra dev
+          else
+            uv sync --locked --extra dev
+          fi
 
       - name: Run unit tests
         run: uv run pytest -m 'not smoke' -q
@@ -67,7 +92,7 @@ jobs:
           TAG: ${{ needs.release-please.outputs.tag_name }}
         run: |
           EXPECTED_VERSION="${TAG#promptfoo-v}"
-          if ls dist/*-${EXPECTED_VERSION}-*.whl 1> /dev/null 2>&1; then
+          if compgen -G "dist/*-${EXPECTED_VERSION}-*.whl" > /dev/null; then
             echo "✓ Package version ${EXPECTED_VERSION} matches release tag ${TAG}"
           else
             echo "ERROR: Package version mismatch!"
@@ -82,6 +107,7 @@ jobs:
         with:
           name: dist
           path: dist/
+          if-no-files-found: error
 
   publish-pypi:
     if: |

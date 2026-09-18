@@ -5,8 +5,38 @@ This module tests that appropriate instructions are generated for
 different platforms and environments.
 """
 
+import pytest
+
 from promptfoo.environment import Environment
 from promptfoo.instructions import get_installation_instructions
+
+
+@pytest.mark.parametrize(
+    ("env", "recommended"),
+    [
+        (Environment(os_type="linux", is_lambda=True), "node --version"),
+        (Environment(os_type="linux", is_cloud_function=True, cloud_provider="gcp"), "node --version"),
+        (Environment(os_type="linux", is_ci=True, ci_platform="github"), "node-version: '24'"),
+        (Environment(os_type="linux", is_ci=True, ci_platform="gitlab"), "image: node:24"),
+        (Environment(os_type="linux", is_ci=True, ci_platform="circleci"), "node-version: '24'"),
+        (Environment(os_type="linux", linux_distro="ubuntu", is_docker=True), "setup_24.x"),
+        (Environment(os_type="linux", is_docker=True), "FROM node:24-bookworm-slim"),
+        (Environment(os_type="linux", is_wsl=True), "nvm install 24"),
+        (Environment(os_type="linux", linux_distro="rhel", has_sudo=True), "setup_24.x"),
+        (Environment(os_type="darwin"), "nvm install 24"),
+        (Environment(os_type="windows"), "OpenJS.NodeJS.LTS"),
+    ],
+)
+def test_installation_help_requires_supported_node(env: Environment, recommended: str) -> None:
+    """Every platform states the exact minimum and versioned examples install a supported runtime."""
+    instructions = get_installation_instructions(env)
+
+    assert "requires Node.js 22.22.0 or newer" in instructions
+    assert recommended in instructions
+    assert "nvm install 20" not in instructions
+    assert "setup_20.x" not in instructions
+    assert "node-version: '20'" not in instructions
+    assert "image: node:20" not in instructions
 
 
 class TestLambdaInstructions:
