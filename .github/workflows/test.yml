@@ -71,28 +71,94 @@ jobs:
       - name: Check GitHub workflows
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 
-      - name: Verify Alpine installation instructions
+      - name: Verify container installation instructions
         run: |
-          alpine_dir="$RUNNER_TEMP/promptfoo-alpine"
-          mkdir -p "$alpine_dir"
-          uv run python - <<'PY' > "$alpine_dir/Dockerfile"
+          instruction_dir="$RUNNER_TEMP/promptfoo-docker-help"
+          uv run python - "$instruction_dir" <<'PY'
+          import sys
+          from pathlib import Path
+
           from promptfoo.environment import Environment
           from promptfoo.instructions import get_installation_instructions
 
-          instructions = get_installation_instructions(
-              Environment(os_type="linux", linux_distro="alpine", is_docker=True)
-          )
-          for line in instructions.splitlines():
-              command = line.strip()
-              if command.startswith(("FROM ", "RUN ", "ENV ")):
-                  print(command)
+          for label, distro, version in (("alpine", "alpine", None), ("bookworm", "debian", "12"),
+                                        ("trixie", "debian", "13"), ("bookworm-env", "debian", "12"),
+                                        ("bookworm-npmrc", "debian", "12")):
+              instructions = get_installation_instructions(
+                  Environment(os_type="linux", linux_distro=distro, linux_distro_version=version, is_docker=True)
+              )
+              commands = [line.strip() for line in instructions.splitlines()]
+              commands = [command for command in commands if command.startswith(("FROM ", "COPY ", "RUN ", "ENV "))]
+              if distro == "debian":
+                  runtime = next(index for index, command in enumerate(commands) if command.startswith("FROM python:"))
+                  inherited = ["RUN python -c 'import pathlib, sysconfig; "
+                               "(pathlib.Path(sysconfig.get_path(\"purelib\")) / \"promptfoo_help_probe.py\").touch()'"]
+                  if label in ("bookworm-env", "bookworm-npmrc"):
+                      inherited += ["RUN useradd -m app && mkdir -p /home/app/.npm-global "
+                                    "&& chown app:app /home/app/.npm-global",
+                                    'ENV PATH="/usr/local/bin:/home/app/.npm-global/bin:/usr/bin:/bin"']
+                      if label == "bookworm-env":
+                          inherited.append('ENV NPM_CONFIG_PREFIX="/home/app/.npm-global"')
+                      else:
+                          inherited.append("RUN printf '%s\\n' 'prefix=/home/app/.npm-global' > /home/app/.npmrc "
+                                           "&& chown app:app /home/app/.npmrc")
+                  else:
+                      inherited.append('ENV PATH="/opt/venv/bin:/usr/bin:/bin"')
+                  commands[runtime + 1:runtime + 1] = inherited
+              directory = Path(sys.argv[1]) / label
+              directory.mkdir(parents=True, exist_ok=True)
+              (directory / "Dockerfile").write_text("\n".join(commands) + "\n")
           PY
-          cat >> "$alpine_dir/Dockerfile" <<'EOF'
+          for distro in alpine bookworm trixie bookworm-env bookworm-npmrc; do
+            cat >> "$instruction_dir/$distro/Dockerfile" <<'EOF'
           RUN node --version | grep -E '^v24\.' \
-              && npm --version && npx --version && python --version && pip --version \
-              && python -c 'import sys; assert sys.prefix == "/opt/venv"'
+              && npm --version && npx --version && python --version && pip --version
           EOF
-          docker build --progress=plain "$alpine_dir"
+            if [ "$distro" = alpine ]; then
+              echo 'RUN python -c "import sys; assert sys.prefix == \"/opt/venv\""' >> "$instruction_dir/$distro/Dockerfile"
+            else
+              cat >> "$instruction_dir/$distro/Dockerfile" <<'EOF'
+          RUN python -c "import sys, promptfoo_help_probe; assert sys.version_info[:2] == (3, 12)"
+          RUN env PATH=/opt/venv/bin:/usr/bin:/bin sh -c "node --version && npm --version && npx --version"
+          RUN dpkg-query -W -f='${Version}' nodejs | grep -E '^24\.' \
+              && apt-get update && apt-get install -y --no-install-recommends nodejs \
+              && node --version | grep -E '^v24\.' && rm -rf /var/lib/apt/lists/*
+          RUN mkdir -p /tmp/promptfoo-fixture /opt/venv/bin \
+              && printf '%s\n' '{"name":"promptfoo","version":"1.0.0","bin":"cli.js"}' > /tmp/promptfoo-fixture/package.json \
+              && printf '%s\n' '#!/usr/bin/env node' 'console.log("global-promptfoo")' > /tmp/promptfoo-fixture/cli.js \
+              && chmod +x /tmp/promptfoo-fixture/cli.js \
+              && printf '%s\n' '#!/bin/sh' 'echo python-promptfoo' > /usr/local/bin/promptfoo \
+              && chmod +x /usr/local/bin/promptfoo && cp /usr/local/bin/promptfoo /opt/venv/bin/promptfoo \
+              && npm pack --offline --ignore-scripts --pack-destination /tmp /usr/lib/node_modules/npm
+          EOF
+              case "$distro" in
+                bookworm-env|bookworm-npmrc)
+                  cat >> "$instruction_dir/$distro/Dockerfile" <<'EOF'
+          ENV HOME=/home/app
+          USER app
+          RUN test "$(npm prefix --global)" = /home/app/.npm-global && test "$(command -v promptfoo)" = /usr/local/bin/promptfoo
+          EOF
+                  ;;
+                *)
+                  cat >> "$instruction_dir/$distro/Dockerfile" <<'EOF'
+          RUN test "$(npm prefix --global)" = /usr && test "$(command -v promptfoo)" = /opt/venv/bin/promptfoo
+          EOF
+                  ;;
+              esac
+              cat >> "$instruction_dir/$distro/Dockerfile" <<'EOF'
+          RUN prefix="$(npm prefix --global)" \
+              && python -c "import sysconfig; assert sysconfig.get_path('scripts') != '$prefix/bin'" \
+              && npm install --offline --no-audit --no-fund --global /tmp/promptfoo-fixture \
+              && test "$(promptfoo)" = python-promptfoo && test "$("$prefix/bin/promptfoo")" = global-promptfoo \
+              && npm install --offline --no-audit --no-fund --global /tmp/npm-*.tgz \
+              && hash -r \
+              && test "$(readlink -f "$(command -v npm)")" = "$prefix/lib/node_modules/npm/bin/npm-cli.js" \
+              && test "$(readlink -f "$(command -v npx)")" = "$prefix/lib/node_modules/npm/bin/npx-cli.js" \
+              && npm --version && npx --version
+          EOF
+            fi
+            docker build --progress=plain "$instruction_dir/$distro"
+          done
           docker run --rm alpine:3.20 sh -ec '
             apk update
             apk add --no-cache nodejs npm

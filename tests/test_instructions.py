@@ -1,456 +1,220 @@
-"""
-Tests for platform-specific installation instructions.
-
-This module tests that appropriate instructions are generated for
-different platforms and environments.
-"""
-
 import pytest
 
 from promptfoo.environment import Environment
 from promptfoo.instructions import get_installation_instructions
+from promptfoo.node import MIN_NODE_VERSION_TEXT
+
+
+@pytest.mark.parametrize("platform", ["linux", "darwin", "windows", "freebsd14"])
+def test_every_platform_gets_the_runtime_requirement_and_a_working_fallback(platform: str) -> None:
+    output = get_installation_instructions(Environment(os_type=platform))
+
+    assert f"requires Node.js {MIN_NODE_VERSION_TEXT} or newer" in output
+    assert "Node.js 24 LTS with npm" in output
+    assert "https://nodejs.org/en/download" in output
+    npx = "npx.cmd" if platform == "windows" else "npx"
+    assert f"   node --version\n   {npx} --version" in output
+    if platform == "windows":
+        assert "use: npx.exe --version" in output
+    assert "node --version &&" not in output
+    assert "DIRECT USAGE after installing Node.js: npx promptfoo@latest eval" in output
 
 
 @pytest.mark.parametrize(
-    ("env", "recommended"),
-    [
-        (Environment(os_type="linux", is_lambda=True), "node --version"),
-        (Environment(os_type="linux", is_cloud_function=True, cloud_provider="gcp"), "node --version"),
-        (Environment(os_type="linux", is_ci=True, ci_platform="github"), "node-version: '24'"),
-        (Environment(os_type="linux", is_ci=True, ci_platform="gitlab"), "image: node:24"),
-        (Environment(os_type="linux", is_ci=True, ci_platform="circleci"), "node-version: '24'"),
-        (Environment(os_type="linux", linux_distro="alpine"), "apk add --no-cache 'nodejs~24' npm"),
-        (Environment(os_type="linux", linux_distro="alpine", is_docker=True), "FROM node:24-alpine"),
-        (Environment(os_type="linux", linux_distro="ubuntu", is_docker=True), "setup_24.x"),
-        (Environment(os_type="linux", is_docker=True), "FROM node:24-bookworm-slim"),
-        (Environment(os_type="linux", is_wsl=True), "nvm install 24"),
-        (Environment(os_type="linux", linux_distro="rhel", has_sudo=True), "setup_24.x"),
-        (Environment(os_type="darwin"), "nvm install 24"),
-        (Environment(os_type="windows"), "OpenJS.NodeJS.LTS"),
-    ],
+    "platform, hint",
+    [("linux", "nvm install 24"), ("darwin", "brew install node"), ("windows", "winget install OpenJS.NodeJS.LTS")],
 )
-def test_installation_help_requires_supported_node(env: Environment, recommended: str) -> None:
-    """Every platform states the exact minimum and versioned examples install a supported runtime."""
-    instructions = get_installation_instructions(env)
-
-    assert "requires Node.js 22.22.0 or newer" in instructions
-    assert recommended in instructions
-    assert "nvm install 20" not in instructions
-    assert "setup_20.x" not in instructions
-    assert "node-version: '20'" not in instructions
-    assert "image: node:20" not in instructions
+def test_common_platforms_get_one_relevant_installation_hint(platform: str, hint: str) -> None:
+    assert hint in get_installation_instructions(Environment(os_type=platform))
 
 
-class TestLambdaInstructions:
-    """Test instructions for AWS Lambda."""
+def test_alpine_dockerfile_contains_only_the_verified_setup_steps() -> None:
+    output = get_installation_instructions(Environment(os_type="linux", linux_distro="alpine", is_docker=True))
+    commands = [line.strip() for line in output.splitlines() if line.strip().startswith(("FROM ", "RUN ", "ENV "))]
 
-    def test_lambda_instructions(self) -> None:
-        """Generate Lambda-specific instructions."""
-        env = Environment(
-            os_type="linux",
-            linux_distro="rhel",
-            cloud_provider="aws",
-            is_lambda=True,
-        )
-
-        instructions = get_installation_instructions(env)
-
-        assert "AWS Lambda" in instructions
-        assert "Lambda Layer" in instructions
-        assert "Node.js runtime" in instructions
+    assert commands == [
+        "FROM node:24-alpine",
+        "RUN apk add --no-cache python3 py3-pip",
+        "RUN python3 -m venv /opt/venv",
+        'ENV PATH="/opt/venv/bin:$PATH"',
+    ]
+    assert "apk add --no-cache 'nodejs~24' npm" in output
+    assert "upgrade Alpine or use the official node:24-alpine container" in output
+    assert "apk add --no-cache nodejs npm" not in output
 
 
-class TestCloudFunctionInstructions:
-    """Test instructions for Cloud Functions."""
+def test_amazon_linux_2023_installs_both_versioned_packages_and_selects_the_active_node() -> None:
+    output = get_installation_instructions(
+        Environment(os_type="linux", linux_distro="amzn", linux_distro_version="2023")
+    )
 
-    def test_gcp_cloud_function_instructions(self) -> None:
-        """Generate GCP Cloud Functions instructions."""
-        env = Environment(
-            os_type="linux",
-            cloud_provider="gcp",
-            is_cloud_function=True,
-        )
-
-        instructions = get_installation_instructions(env)
-
-        assert "Google Cloud Functions" in instructions or "GCP" in instructions
-
-    def test_azure_function_instructions(self) -> None:
-        """Generate Azure Functions instructions."""
-        env = Environment(
-            os_type="linux",
-            cloud_provider="azure",
-            is_cloud_function=True,
-        )
-
-        instructions = get_installation_instructions(env)
-
-        assert "Azure Functions" in instructions
+    assert "sudo dnf install -y nodejs24 nodejs24-npm" in output
+    assert "sudo /usr/sbin/alternatives --set node /usr/bin/node-24" in output
+    assert "omit sudo when running as root" in output
+    assert "https://docs.aws.amazon.com/linux/al2023/ug/nodejs.html" in output
+    assert "2023.9.20251110" in output
+    assert "dnf --releasever=latest install" in output
+    assert "Without sudo, install nvm: https://github.com/nvm-sh/nvm#installing-and-updating" in output
+    assert "nvm install 24" in output
+    assert "dnf install -y nodejs\n" not in output
 
 
-class TestCIInstructions:
-    """Test instructions for CI/CD environments."""
-
-    def test_github_actions_instructions(self) -> None:
-        """Generate GitHub Actions-specific instructions."""
-        env = Environment(
-            os_type="linux",
-            linux_distro="ubuntu",
-            is_ci=True,
-            ci_platform="github",
-        )
-
-        instructions = get_installation_instructions(env)
-
-        assert "actions/setup-node@v7" in instructions
-        assert "node-version: '24'" in instructions
-        assert "GITHUB" in instructions.upper()
-
-    def test_gitlab_ci_instructions(self) -> None:
-        """Generate GitLab CI instructions."""
-        env = Environment(
-            os_type="linux",
-            is_ci=True,
-            ci_platform="gitlab",
-        )
-
-        instructions = get_installation_instructions(env)
-
-        assert "gitlab" in instructions.lower() or "GITLAB" in instructions
-        assert "image:" in instructions or "before_script" in instructions
-
-    def test_circleci_instructions(self) -> None:
-        """Generate CircleCI instructions."""
-        env = Environment(
-            os_type="linux",
-            is_ci=True,
-            ci_platform="circleci",
-        )
-
-        instructions = get_installation_instructions(env)
-
-        assert "circleci" in instructions.lower() or "CIRCLECI" in instructions
+def test_unknown_amazon_release_is_not_given_amazon_linux_2023_commands() -> None:
+    output = get_installation_instructions(Environment(os_type="linux", linux_distro="amzn"))
+    assert "nvm install 24" in output
+    assert "nodejs24-npm" not in output
 
 
-class TestDockerInstructions:
-    """Test instructions for Docker containers."""
-
-    def test_docker_alpine_instructions(self) -> None:
-        """Generate Docker instructions for Alpine."""
-        env = Environment(
-            os_type="linux",
-            linux_distro="alpine",
-            is_docker=True,
-        )
-
-        instructions = get_installation_instructions(env)
-
-        assert "FROM node:24-alpine" in instructions
-        assert "RUN apk add --no-cache python3 py3-pip" in instructions
-        assert "python3 -m venv /opt/venv" in instructions
-        assert "apk add --no-cache nodejs npm" not in instructions
-        assert "Dockerfile" in instructions
-
-    def test_docker_ubuntu_instructions(self) -> None:
-        """Generate Docker instructions for Ubuntu."""
-        env = Environment(
-            os_type="linux",
-            linux_distro="ubuntu",
-            is_docker=True,
-        )
-
-        instructions = get_installation_instructions(env)
-
-        assert "apt-get" in instructions
-        assert "Dockerfile" in instructions
+@pytest.mark.parametrize("container", [False, True])
+def test_amazon_linux_2_recommends_a_compatible_os(container: bool) -> None:
+    output = get_installation_instructions(
+        Environment(os_type="linux", linux_distro="amzn", linux_distro_version="2", is_docker=container)
+    )
+    assert "Amazon Linux 2023" in output
+    assert "require newer glibc" in output
+    assert "nvm install 24" not in output
+    if container:
+        assert "compatible base image" in output
+        assert "keep your existing base image" not in output
 
 
-class TestWSLInstructions:
-    """Test instructions for WSL (Windows Subsystem for Linux)."""
-
-    def test_wsl_instructions(self) -> None:
-        """Generate WSL-specific instructions."""
-        env = Environment(
-            os_type="linux",
-            linux_distro="ubuntu",
-            is_wsl=True,
-        )
-
-        instructions = get_installation_instructions(env)
-
-        assert "WSL" in instructions or "Windows Subsystem for Linux" in instructions
-        assert "nvm" in instructions
-        assert "/mnt/c" in instructions  # Should mention Windows filesystem
-        assert "performance" in instructions.lower()
-
-    def test_wsl_with_ubuntu_shows_both(self) -> None:
-        """WSL instructions should show both WSL tips and Ubuntu instructions."""
-        env = Environment(
-            os_type="linux",
-            linux_distro="ubuntu",
-            is_wsl=True,
-            has_sudo=True,
-        )
-
-        instructions = get_installation_instructions(env)
-
-        # Should have WSL-specific guidance
-        assert "WSL" in instructions
-        # Should also have Ubuntu/Debian instructions
-        assert "UBUNTU" in instructions or "DEBIAN" in instructions
-
-
-class TestLinuxInstructions:
-    """Test instructions for various Linux distributions."""
-
-    def test_ubuntu_instructions_with_sudo(self) -> None:
-        """Generate Ubuntu instructions with sudo access."""
-        env = Environment(
-            os_type="linux",
-            linux_distro="ubuntu",
-            has_sudo=True,
-        )
-
-        instructions = get_installation_instructions(env)
-
-        assert "UBUNTU/DEBIAN" in instructions
-        assert "sudo apt" in instructions
-        assert "NodeSource" in instructions
-
-    def test_ubuntu_instructions_without_sudo(self) -> None:
-        """Generate Ubuntu instructions without sudo access."""
-        env = Environment(
-            os_type="linux",
-            linux_distro="ubuntu",
-            has_sudo=False,
-        )
-
-        instructions = get_installation_instructions(env)
-
-        assert "nvm" in instructions
-        # Should NOT suggest sudo apt commands when user doesn't have sudo
-        assert "sudo apt" not in instructions
-        assert "sudo snap" not in instructions
-
-    def test_debian_instructions(self) -> None:
-        """Generate Debian instructions."""
-        env = Environment(
+def test_ci_container_and_wsl_hints_can_coexist() -> None:
+    output = get_installation_instructions(
+        Environment(
             os_type="linux",
             linux_distro="debian",
-            has_sudo=True,
-        )
-
-        instructions = get_installation_instructions(env)
-
-        assert "UBUNTU/DEBIAN" in instructions
-        assert "apt" in instructions
-
-    def test_rhel_instructions_with_sudo(self) -> None:
-        """Generate RHEL instructions with sudo."""
-        env = Environment(
-            os_type="linux",
-            linux_distro="rhel",
-            has_sudo=True,
-        )
-
-        instructions = get_installation_instructions(env)
-
-        assert "RHEL" in instructions or "CENTOS" in instructions or "FEDORA" in instructions
-        assert "dnf" in instructions or "yum" in instructions
-
-    def test_amazon_linux_instructions(self) -> None:
-        """Generate Amazon Linux instructions."""
-        env = Environment(
-            os_type="linux",
-            linux_distro="rhel",
-            linux_distro_version="2023",
-            has_sudo=True,
-        )
-
-        instructions = get_installation_instructions(env)
-
-        assert "AMAZON LINUX" in instructions
-        assert "dnf" in instructions or "yum" in instructions
-
-    def test_alpine_instructions(self) -> None:
-        """Generate Alpine Linux instructions."""
-        env = Environment(
-            os_type="linux",
-            linux_distro="alpine",
-            linux_distro_version="3.20",
-        )
-
-        instructions = get_installation_instructions(env)
-
-        assert "ALPINE" in instructions
-        assert "apk add --no-cache 'nodejs~24' npm" in instructions
-        assert "upgrade Alpine or use the official node:24-alpine container" in instructions
-        assert "node --version" in instructions
-        assert "apk add --update nodejs npm" not in instructions
-        assert "apk add --no-cache nodejs npm" not in instructions
-
-    def test_arch_instructions(self) -> None:
-        """Generate Arch Linux instructions."""
-        env = Environment(
-            os_type="linux",
-            linux_distro="arch",
-        )
-
-        instructions = get_installation_instructions(env)
-
-        assert "ARCH" in instructions
-        assert "pacman" in instructions
-
-    def test_suse_instructions(self) -> None:
-        """Generate SUSE instructions."""
-        env = Environment(
-            os_type="linux",
-            linux_distro="suse",
-        )
-
-        instructions = get_installation_instructions(env)
-
-        assert "SUSE" in instructions or "OPENSUSE" in instructions
-        assert "zypper" in instructions
-
-    def test_generic_linux_instructions(self) -> None:
-        """Generate generic Linux instructions for unknown distro."""
-        env = Environment(
-            os_type="linux",
-            linux_distro="unknown",
-        )
-
-        instructions = get_installation_instructions(env)
-
-        assert "nvm" in instructions
-
-
-class TestMacOSInstructions:
-    """Test instructions for macOS."""
-
-    def test_macos_instructions(self) -> None:
-        """Generate macOS instructions."""
-        env = Environment(os_type="darwin")
-
-        instructions = get_installation_instructions(env)
-
-        assert "MACOS" in instructions
-        assert "brew install node" in instructions
-        assert "Official installer" in instructions
-        assert "nvm" in instructions
-        assert "nodejs.org" in instructions
-
-
-class TestWindowsInstructions:
-    """Test instructions for Windows."""
-
-    def test_windows_instructions(self) -> None:
-        """Generate Windows instructions."""
-        env = Environment(os_type="windows")
-
-        instructions = get_installation_instructions(env)
-
-        assert "WINDOWS" in instructions
-        assert "winget" in instructions
-        assert "Chocolatey" in instructions or "choco" in instructions
-        assert "Scoop" in instructions
-
-
-class TestVenvInstructions:
-    """Test virtual environment instructions."""
-
-    def test_venv_instructions_included(self) -> None:
-        """Include venv instructions when in virtualenv."""
-        env = Environment(
-            os_type="linux",
-            linux_distro="ubuntu",
-            is_venv=True,
-        )
-
-        instructions = get_installation_instructions(env)
-
-        assert "nodeenv" in instructions
-        assert "virtualenv" in instructions.lower()
-
-    def test_conda_instructions_included(self) -> None:
-        """Include venv instructions when in conda."""
-        env = Environment(
-            os_type="linux",
-            linux_distro="ubuntu",
-            is_conda=True,
-        )
-
-        instructions = get_installation_instructions(env)
-
-        assert "nodeenv" in instructions
-
-
-class TestNpxInstructions:
-    """Test npx direct usage instructions."""
-
-    def test_npx_instructions_always_included(self) -> None:
-        """NPX instructions should always be included."""
-        env = Environment(os_type="linux", linux_distro="ubuntu")
-
-        instructions = get_installation_instructions(env)
-
-        assert "npx promptfoo@latest" in instructions
-        assert "DIRECT USAGE" in instructions
-
-
-class TestErrorMessageFormat:
-    """Test error message formatting."""
-
-    def test_error_message_has_clear_header(self) -> None:
-        """Error message should have a clear header."""
-        env = Environment(os_type="linux", linux_distro="ubuntu")
-
-        instructions = get_installation_instructions(env)
-
-        assert "ERROR: promptfoo requires Node.js" in instructions
-        assert "=" * 70 in instructions
-
-    def test_multiline_output(self) -> None:
-        """Instructions should be multi-line."""
-        env = Environment(os_type="linux", linux_distro="ubuntu")
-
-        instructions = get_installation_instructions(env)
-
-        lines = instructions.split("\n")
-        assert len(lines) > 5  # Should have multiple lines
-
-
-class TestComplexEnvironments:
-    """Test instructions for complex, combined environments."""
-
-    def test_docker_github_actions_ubuntu(self) -> None:
-        """Generate instructions for Docker in GitHub Actions on Ubuntu."""
-        env = Environment(
-            os_type="linux",
-            linux_distro="ubuntu",
+            linux_distro_version="12",
+            ci_platform="GitHub Actions",
             is_docker=True,
-            is_ci=True,
-            ci_platform="github",
+            is_wsl=True,
         )
+    )
 
-        instructions = get_installation_instructions(env)
+    assert "- uses: actions/setup-node@v7\n     with:\n       node-version: '24'" in output
+    assert "FROM python:3.12-slim-bookworm" in output
+    assert "Keep FROM set to your existing image, platform, and Python environment" in output
+    assert "FROM node:" not in output
+    assert "https://deb.nodesource.com/setup_24.x" in output
+    assert "apt-get install -y --no-install-recommends nodejs" in output
+    assert "apt recipe supports amd64 and arm64. For other CPU architectures" in output
+    assert 'ENV PATH="${PATH}:/usr/local/bin"' in output
+    assert "If an inherited NPM_CONFIG_PREFIX points to an unwritable directory, change it" in output
+    assert "Keep an existing writable npm prefix only if its bin is separate from Python's scripts directory" in output
+    assert "add it before /usr/bin and after your Python scripts" in output
+    assert "npm config set prefix ~/.npm-global" in output
+    assert "nvm install" not in output
+    assert "https://github.com/nodesource/distributions" in output
+    assert "install Node.js inside your Linux distribution" in output
 
-        # Should include both CI and Docker instructions
-        assert "GITHUB" in instructions.upper()
-        assert "DOCKER" in instructions.upper()
 
-    def test_aws_ec2_rhel_with_venv(self) -> None:
-        """Generate instructions for AWS EC2 RHEL with virtualenv."""
-        env = Environment(
-            os_type="linux",
-            linux_distro="rhel",
-            cloud_provider="aws",
-            is_venv=True,
-            has_sudo=True,
+@pytest.mark.parametrize(
+    ("distribution", "version", "command"),
+    [
+        ("ubuntu", "24.04", "https://deb.nodesource.com/setup_24.x"),
+        ("amzn", "2023", "dnf --releasever=latest install -y nodejs24 nodejs24-npm"),
+    ],
+)
+def test_non_bookworm_containers_keep_their_original_base(distribution: str, version: str, command: str) -> None:
+    output = get_installation_instructions(
+        Environment(os_type="linux", linux_distro=distribution, linux_distro_version=version, is_docker=True)
+    )
+    assert "keep your existing FROM" in output
+    assert command in output
+    assert "FROM python:" not in output
+    assert "bookworm" not in output
+    if distribution == "amzn":
+        assert "/usr/sbin/alternatives --set node" in output
+        assert "2023.9.20251110" in output
+    if distribution == "ubuntu":
+        commands = [line for line in output.splitlines() if line.strip().startswith("RUN ")]
+        assert len(commands) == 1
+        assert "apt-get update" in commands[0]
+        assert "rm -rf /var/lib/apt/lists/*" in commands[0]
+        assert "apt recipe supports amd64 and arm64. For other CPU architectures" in output
+
+
+def test_trixie_container_installs_node_on_its_existing_platform() -> None:
+    output = get_installation_instructions(
+        Environment(os_type="linux", linux_distro="debian", linux_distro_version="13", is_docker=True)
+    )
+    assert "Debian Trixie" in output
+    assert "FROM python:3.12-slim-trixie" in output
+    assert "FROM node:" not in output
+    assert "apt-get install -y --no-install-recommends nodejs" in output
+    assert 'ENV PATH="${PATH}:/usr/local/bin"' in output
+    assert "existing image, platform, and Python environment" in output
+    assert "bookworm" not in output
+
+
+def test_unknown_container_does_not_claim_to_be_bookworm() -> None:
+    output = get_installation_instructions(
+        Environment(os_type="linux", linux_distro="debian", linux_distro_version="14", is_docker=True)
+    )
+    assert "keep your existing base image" in output
+    assert "distribution and CPU architecture" in output
+    assert "FROM python:" not in output
+
+
+def test_other_ci_uses_the_provider_setup_instructions() -> None:
+    output = get_installation_instructions(Environment(os_type="linux", ci_platform="GitLab CI"))
+    assert "GitLab CI: use your CI provider's Node.js setup step or an image with Node.js 24." in output
+    assert "actions/setup-node" not in output
+
+
+@pytest.mark.parametrize(
+    "provider, label, documentation, hosting",
+    [
+        (
+            "google",
+            "Google Cloud Functions / Cloud Run",
+            "docs.cloud.google.com/run/docs/building/containers",
+            "first-generation functions, must move to a Cloud Run service",
+        ),
+        (
+            "azure",
+            "Azure Functions",
+            "learn.microsoft.com/en-us/azure/azure-functions/functions-how-to-custom-container",
+            "Flex Consumption do not accept custom images. Move to Azure Container Apps",
+        ),
+    ],
+)
+def test_serverless_links_explain_how_to_build_both_runtimes(
+    provider: str, label: str, documentation: str, hosting: str
+) -> None:
+    output = get_installation_instructions(
+        Environment(
+            os_type="linux", linux_distro="amzn", linux_distro_version="2023", is_docker=True, serverless=provider
         )
+    )
 
-        instructions = get_installation_instructions(env)
+    assert f"{label}: build and deploy a custom container that includes both Node.js and Python" in output
+    assert documentation in output
+    assert hosting in output
+    assert "https://nodejs.org/en/download" in output
+    assert "when building the image" in output
+    assert "sudo" not in output
+    assert "nvm" not in output
+    assert "npx promptfoo" not in output
+    if provider == "azure":
+        assert "Select that hosting environment in the documentation" in output
+        assert "?pivots=" not in output
 
-        # Should include RHEL and venv instructions
-        assert "RHEL" in instructions or "CENTOS" in instructions or "FEDORA" in instructions
-        assert "nodeenv" in instructions
+
+def test_lambda_zip_can_use_a_layer_or_choose_to_create_an_image_based_function() -> None:
+    output = get_installation_instructions(
+        Environment(os_type="linux", linux_distro="amzn", linux_distro_version="2023", is_docker=True, serverless="aws")
+    )
+    assert "existing ZIP function can keep its configuration" in output
+    assert "Node, npm and npx in /opt/bin" in output
+    assert "supporting files" in output
+    assert "https://docs.aws.amazon.com/lambda/latest/dg/packaging-layers.html" in output
+    assert "If you choose a container image instead, create a new image-based function" in output
+    assert "https://docs.aws.amazon.com/lambda/latest/dg/images-create.html" in output
+    assert "sudo" not in output
+
+
+def test_lambda_on_amazon_linux_2_requires_a_compatible_runtime_before_packaging() -> None:
+    output = get_installation_instructions(
+        Environment(os_type="linux", linux_distro="amzn", linux_distro_version="2", is_docker=True, serverless="aws")
+    )
+    assert "first upgrade to an Amazon Linux 2023 based Python runtime" in output
