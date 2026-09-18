@@ -11,14 +11,43 @@ from promptfoo.environment import Environment
 from promptfoo.instructions import get_installation_instructions
 
 
+def windows_verification_commands(launcher: str | None = None) -> list[str]:
+    instructions = get_installation_instructions(Environment(os_type="windows")).splitlines()
+    start = instructions.index("Verify with:") + 1
+    if launcher is None:
+        launcher = next((name for name in ("npx.cmd", "npx.exe") if shutil.which(name)), None)
+    assert launcher, "Neither npx.cmd nor npx.exe is available"
+    npx = instructions[start + 1].strip()
+    if launcher == "npx.exe":
+        npx = next(line.partition("use: ")[2] for line in instructions if "use: npx.exe" in line)
+    return [instructions[start].strip(), npx]
+
+
+def git_bash() -> Path | None:
+    roots = []
+    if git := shutil.which("git"):
+        location = Path(git).resolve()
+        roots += [location.parent, location.parent.parent]
+    for variable, suffix in (("PROGRAMFILES", "Git"), ("LOCALAPPDATA", "Programs/Git")):
+        if directory := os.environ.get(variable):
+            roots.append(Path(directory) / suffix)
+    return next(
+        (
+            candidate
+            for root in roots
+            for candidate in (root / "bin/bash.exe", root / "usr/bin/bash.exe")
+            if candidate.is_file()
+        ),
+        None,
+    )
+
+
 @pytest.mark.smoke
 @pytest.mark.skipif(sys.platform != "win32", reason="Tests native Windows PowerShell's restricted execution policy")
 def test_windows_verification_commands_run_with_powershell_scripts_disabled() -> None:
     powershell = shutil.which("powershell")
     assert powershell
-    instructions = get_installation_instructions(Environment(os_type="windows")).splitlines()
-    start = instructions.index("Verify with:") + 1
-    commands = [line.strip() for line in instructions[start : start + 2]]
+    commands = windows_verification_commands()
     script = "; ".join(["$ErrorActionPreference = 'Stop'", *commands, "if ($LASTEXITCODE) { exit $LASTEXITCODE }"])
 
     result = subprocess.run(
@@ -35,12 +64,9 @@ def test_windows_verification_commands_run_with_powershell_scripts_disabled() ->
 @pytest.mark.smoke
 @pytest.mark.skipif(sys.platform != "win32", reason="Tests native Windows Git Bash")
 def test_windows_verification_commands_run_in_git_bash() -> None:
-    bash = Path(os.environ["PROGRAMFILES"]) / "Git" / "bin" / "bash.exe"
-    if not bash.is_file():
+    if not (bash := git_bash()):
         pytest.skip("Git for Windows is not installed")
-    instructions = get_installation_instructions(Environment(os_type="windows")).splitlines()
-    start = instructions.index("Verify with:") + 1
-    commands = [line.strip() for line in instructions[start : start + 2]]
+    commands = windows_verification_commands()
 
     result = subprocess.run(
         [str(bash), "--noprofile", "--norc", "-c", "set -e; " + "; ".join(commands)],
@@ -51,3 +77,32 @@ def test_windows_verification_commands_run_in_git_bash() -> None:
 
     assert result.returncode == 0, result.stderr
     assert len([line for line in result.stdout.splitlines() if re.fullmatch(r"v?\d+\.\d+\.\d+", line)]) == 2
+
+
+@pytest.mark.smoke
+@pytest.mark.skipif(sys.platform != "win32", reason="Tests native Windows executable lookup")
+@pytest.mark.parametrize("shell", ["powershell", "git-bash"])
+def test_windows_npx_executable_alternative_works_in_each_shell(tmp_path: Path, shell: str) -> None:
+    node = shutil.which("node")
+    assert node
+    shutil.copy2(node, tmp_path / "npx.exe")
+    command = windows_verification_commands("npx.exe")[1]
+    if shell == "powershell":
+        powershell = shutil.which("powershell")
+        assert powershell
+        prefix = [powershell, "-NoProfile", "-ExecutionPolicy", "Restricted", "-Command"]
+    elif bash := git_bash():
+        prefix = [str(bash), "--noprofile", "--norc", "-c"]
+    else:
+        pytest.skip("Git for Windows is not installed")
+
+    result = subprocess.run(
+        [*prefix, command],
+        env=os.environ | {"PATH": str(tmp_path) + os.pathsep + os.environ["PATH"]},
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert re.fullmatch(r"v\d+\.\d+\.\d+", result.stdout.strip())

@@ -131,9 +131,20 @@ def test_non_bookworm_containers_keep_their_original_base(distribution: str, ver
         assert "rm -rf /var/lib/apt/lists/*" in commands[0]
 
 
-def test_unknown_container_does_not_claim_to_be_bookworm() -> None:
+def test_trixie_container_uses_matching_supported_node_and_python_images() -> None:
     output = get_installation_instructions(
         Environment(os_type="linux", linux_distro="debian", linux_distro_version="13", is_docker=True)
+    )
+    assert "Debian Trixie" in output
+    assert "FROM node:24-trixie-slim AS node" in output
+    assert "FROM python:3.12-slim-trixie" in output
+    assert "/usr/local/bin/node /usr/bin/node" in output
+    assert "bookworm" not in output
+
+
+def test_unknown_container_does_not_claim_to_be_bookworm() -> None:
+    output = get_installation_instructions(
+        Environment(os_type="linux", linux_distro="debian", linux_distro_version="14", is_docker=True)
     )
     assert "keep your existing base image" in output
     assert "distribution and CPU architecture" in output

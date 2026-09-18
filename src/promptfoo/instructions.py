@@ -31,12 +31,16 @@ def _container_instructions(env: Environment) -> list[str]:
             "   RUN python3 -m venv /opt/venv",
             '   ENV PATH="/opt/venv/bin:$PATH"',
         ]
-    if env.linux_distro == "debian" and env.linux_distro_version in ("12", "bookworm"):
+    debian_release = {"12": "bookworm", "bookworm": "bookworm", "13": "trixie", "trixie": "trixie"}.get(
+        env.linux_distro_version or ""
+    )
+    if env.linux_distro == "debian" and debian_release:
         return [
-            "CONTAINER: add Node.js 24 to your existing Debian Bookworm Python image; this example uses Python 3.12.",
+            f"CONTAINER: add Node.js 24 to your existing Debian {debian_release.title()} Python image; "
+            "this example uses Python 3.12.",
             "Keep the second FROM set to your existing image and Python environment:",
-            "   FROM node:24-bookworm-slim AS node",
-            "   FROM python:3.12-slim-bookworm",
+            f"   FROM node:24-{debian_release}-slim AS node",
+            f"   FROM python:3.12-slim-{debian_release}",
             "   COPY --from=node /usr/local/bin/node /usr/local/bin/node",
             "   COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules",
             "   RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm "
