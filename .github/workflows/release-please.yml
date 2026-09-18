@@ -62,12 +62,15 @@ jobs:
       - name: Build package
         run: uv build
 
+      - name: Check distribution metadata with Twine
+        run: uvx --from twine --constraints .github/requirements-twine.txt twine check --strict dist/*
+
       - name: Verify package version matches release tag
         env:
           TAG: ${{ needs.release-please.outputs.tag_name }}
         run: |
           EXPECTED_VERSION="${TAG#promptfoo-v}"
-          if ls dist/*-${EXPECTED_VERSION}-*.whl 1> /dev/null 2>&1; then
+          if compgen -G "dist/*-${EXPECTED_VERSION}-*.whl" > /dev/null; then
             echo "✓ Package version ${EXPECTED_VERSION} matches release tag ${TAG}"
           else
             echo "ERROR: Package version mismatch!"
