@@ -18,6 +18,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from promptfoo.cli import (
+    _VERSION_ENV,
     _WINDOWS_SHELL_EXTENSIONS,
     _WRAPPER_ENV,
     _find_external_promptfoo,
@@ -395,8 +396,16 @@ class TestExitCodeNormalization:
 class TestMainFunction:
     """Test the main CLI entry point with various scenarios."""
 
+    @pytest.fixture(autouse=True)
+    def supported_node(self, monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+        """Provide a supported Node version independently of downstream command mocks."""
+        version = MagicMock(return_value=(22, 22, 0))
+        monkeypatch.setattr("promptfoo.cli.get_node_version", version)
+        monkeypatch.delenv(_VERSION_ENV, raising=False)
+        return version
+
     def test_main_exits_when_node_not_installed(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture, supported_node: MagicMock
     ) -> None:
         """Exits with code 1 and prints help when Node.js not found."""
         monkeypatch.setattr("shutil.which", lambda cmd: None)
@@ -407,9 +416,59 @@ class TestMainFunction:
         assert exc_info.value.code == 1
         captured = capsys.readouterr()
         assert "ERROR: promptfoo requires Node.js" in captured.err
+        assert "22.22.0" in captured.err
+        supported_node.assert_not_called()
 
-    def test_main_uses_external_promptfoo_when_available(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    @pytest.mark.parametrize("version", [(20, 20, 2), (21, 7, 3), (22, 0, 0), (22, 21, 9)])
+    def test_main_rejects_unsupported_node_before_running_promptfoo(
+        self,
+        version: tuple[int, int, int],
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture,
+        supported_node: MagicMock,
+    ) -> None:
+        """Reject old Node installations before looking up or executing either CLI path."""
+        which = MagicMock(return_value="node")
+        downstream = MagicMock()
+        monkeypatch.setattr("shutil.which", which)
+        monkeypatch.setattr("promptfoo.cli._find_external_promptfoo", downstream)
+        monkeypatch.setattr("promptfoo.cli._run_command", downstream)
+        monkeypatch.setattr("promptfoo.cli.record_wrapper_used", downstream)
+        supported_node.return_value = version
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 1
+        output = capsys.readouterr()
+        assert output.out == ""
+        assert "requires Node.js 22.22.0 or newer" in output.err
+        assert f"found v{'.'.join(map(str, version))}" in output.err
+        which.assert_called_once_with("node")
+        downstream.assert_not_called()
+
+    def test_main_rejects_unreadable_node_version(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture, supported_node: MagicMock
+    ) -> None:
+        """Fail with an actionable error when the executable cannot report its version."""
+        monkeypatch.setattr("shutil.which", MagicMock(return_value="node"))
+        downstream = MagicMock()
+        monkeypatch.setattr("promptfoo.cli._find_external_promptfoo", downstream)
+        supported_node.return_value = None
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 1
+        assert "Could not determine the Node.js version" in capsys.readouterr().err
+        downstream.assert_not_called()
+
+    @pytest.mark.parametrize("version", [(22, 22, 0), (22, 23, 0), (23, 0, 0), (24, 0, 0)])
+    def test_main_uses_external_promptfoo_when_available(
+        self, monkeypatch: pytest.MonkeyPatch, supported_node: MagicMock, version: tuple[int, int, int]
+    ) -> None:
         """Uses external promptfoo when found and sets wrapper env var."""
+        supported_node.return_value = version
         monkeypatch.setattr(sys, "argv", ["promptfoo", "eval"])
         monkeypatch.setattr(
             "shutil.which",
@@ -498,6 +557,22 @@ class TestMainFunction:
             assert "-y" in cmd
             assert "promptfoo@latest" in cmd
             assert "eval" in cmd
+
+    def test_main_passes_requested_version_to_npx(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Use the requested npm package version when there is no external CLI."""
+        monkeypatch.setenv(_VERSION_ENV, "0.123.0")
+        monkeypatch.setattr(sys, "argv", ["promptfoo", "eval"])
+        monkeypatch.setattr("shutil.which", lambda cmd: {"node": "node", "npx": "npx"}.get(cmd))
+        monkeypatch.setattr("promptfoo.cli._find_external_promptfoo", lambda: None)
+        monkeypatch.setattr("promptfoo.cli.record_wrapper_used", lambda mode: None)
+        run = MagicMock(return_value=subprocess.CompletedProcess([], 0))
+        monkeypatch.setattr("promptfoo.cli._run_command", run)
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        run.assert_called_once_with(["npx", "-y", "promptfoo@0.123.0", "eval"])
 
     def test_main_exits_when_neither_external_nor_npx_available(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture

@@ -8,9 +8,9 @@
       "bump-patch-for-minor-pre-major": true,
       "extra-files": [
         {
-          "type": "generic",
-          "path": "pyproject.toml",
-          "glob": false
+          "type": "toml",
+          "path": "uv.lock",
+          "jsonpath": "$.package[?(@.name.value == 'promptfoo')].version"
         }
       ]
     }
