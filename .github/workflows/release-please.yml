@@ -42,9 +42,22 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Check out publishing tool requirements from the workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: .github/requirements-twine.txt
+          sparse-checkout-cone-mode: false
+
+      - name: Save publishing tool requirements for historical tags
+        run: cp .github/requirements-twine.txt "$RUNNER_TEMP/requirements-twine.txt"
+
+      - name: Check out the release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
+          persist-credentials: false
 
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
@@ -63,7 +76,7 @@ jobs:
         run: uv build
 
       - name: Check distribution metadata with Twine
-        run: uvx --from twine --constraints .github/requirements-twine.txt twine check --strict dist/*
+        run: uvx --from twine --constraints "$RUNNER_TEMP/requirements-twine.txt" twine check --strict dist/*
 
       - name: Verify package version matches release tag
         env:
