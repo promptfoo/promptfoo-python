@@ -86,7 +86,7 @@ jobs:
                   Environment(os_type="linux", linux_distro=distro, is_docker=True)
               )
               commands = [line.strip() for line in instructions.splitlines()]
-              commands = [command for command in commands if command.startswith(("FROM ", "RUN ", "ENV "))]
+              commands = [command for command in commands if command.startswith(("FROM ", "COPY ", "RUN ", "ENV "))]
               directory = Path(sys.argv[1]) / distro
               directory.mkdir(parents=True, exist_ok=True)
               (directory / "Dockerfile").write_text("\n".join(commands) + "\n")
@@ -97,6 +97,9 @@ jobs:
               && npm --version && npx --version && python --version && pip --version \
               && python -c 'import sys; assert sys.prefix == "/opt/venv"'
           EOF
+            if [ "$distro" = debian ]; then
+              echo 'RUN python -c "import sys; assert sys.version_info[:2] == (3, 12)"' >> "$instruction_dir/$distro/Dockerfile"
+            fi
             docker build --progress=plain "$instruction_dir/$distro"
           done
           docker run --rm alpine:3.20 sh -ec '

@@ -31,10 +31,12 @@ def _linux_release() -> tuple[str | None, str | None]:
     try:
         release = platform.freedesktop_os_release()
     except OSError:
-        return None, None
+        release = {}
 
     distro = release.get("ID", "").lower()
     version = release.get("VERSION_ID") or None
+    if not distro and (alpine_version := _read_probe("/etc/alpine-release").strip()):
+        return "alpine", alpine_version
     family = [distro, *release.get("ID_LIKE", "").lower().split()]
     if "alpine" in family:
         return "alpine", version
@@ -75,7 +77,8 @@ def _serverless() -> str | None:
     if os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
         return "aws"
     if os.environ.get("FUNCTIONS_WORKER_RUNTIME") and any(
-        os.environ.get(name) for name in ("WEBSITE_INSTANCE_ID", "WEBSITE_SITE_NAME", "CONTAINER_APP_NAME")
+        os.environ.get(name)
+        for name in ("WEBSITE_INSTANCE_ID", "WEBSITE_SITE_NAME", "CONTAINER_APP_NAME", "KUBERNETES_SERVICE_HOST")
     ):
         return "azure"
     if os.environ.get("FUNCTION_NAME") or (os.environ.get("FUNCTION_TARGET") and os.environ.get("K_SERVICE")):

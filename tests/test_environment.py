@@ -63,6 +63,12 @@ def test_missing_linux_release_does_not_prevent_generic_help(monkeypatch: pytest
     assert environment._linux_release() == (None, None)
 
 
+def test_alpine_marker_survives_a_missing_standard_release(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(environment.platform, "freedesktop_os_release", MagicMock(side_effect=OSError))
+    monkeypatch.setattr(environment, "_read_probe", lambda path: "3.24.1\n" if path == "/etc/alpine-release" else "")
+    assert environment._linux_release() == ("alpine", "3.24.1")
+
+
 @pytest.mark.parametrize("platform, expected", [("win32", "windows"), ("darwin", "darwin"), ("freebsd14", "freebsd14")])
 def test_non_linux_platforms_do_not_probe_linux_files(
     monkeypatch: pytest.MonkeyPatch, platform: str, expected: str
@@ -135,6 +141,7 @@ def test_detects_ci_guidance(monkeypatch: pytest.MonkeyPatch, variable: str, exp
         (["AWS_LAMBDA_FUNCTION_NAME"], "aws"),
         (["FUNCTIONS_WORKER_RUNTIME", "WEBSITE_INSTANCE_ID"], "azure"),
         (["FUNCTIONS_WORKER_RUNTIME", "CONTAINER_APP_NAME"], "azure"),
+        (["FUNCTIONS_WORKER_RUNTIME", "KUBERNETES_SERVICE_HOST"], "azure"),
         (["FUNCTION_TARGET", "K_SERVICE"], "google"),
         (["FUNCTION_NAME"], "google"),
     ],

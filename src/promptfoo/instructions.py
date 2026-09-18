@@ -20,7 +20,7 @@ _SERVERLESS = {
     "azure": (
         "Azure Functions",
         "Consumption and Flex Consumption do not accept custom images. Move to Azure Container Apps "
-        "or a Linux Premium/Dedicated plan.",
+        "or a Linux Premium/Dedicated plan. On Kubernetes, keep the Azure Functions base image and add Node.",
         "https://learn.microsoft.com/en-us/azure/azure-functions/functions-how-to-custom-container"
         "?pivots=programming-language-python",
     ),
@@ -37,11 +37,15 @@ def _container_instructions(env: Environment) -> list[str]:
             '   ENV PATH="/opt/venv/bin:$PATH"',
         ]
     return [
-        "CONTAINER: start from the official Node.js 24 Debian image and add Python:",
-        "   FROM node:24-bookworm-slim",
-        "   RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv "
-        "&& rm -rf /var/lib/apt/lists/*",
-        "   RUN python3 -m venv /opt/venv",
+        "CONTAINER: add Node.js 24 to your existing Debian Bookworm Python image; this example uses Python 3.12.",
+        "Keep the second FROM set to your application's Python version and use matching Linux distributions:",
+        "   FROM node:24-bookworm-slim AS node",
+        "   FROM python:3.12-slim-bookworm",
+        "   COPY --from=node /usr/local/bin/node /usr/local/bin/node",
+        "   COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules",
+        "   RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm "
+        "&& ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx",
+        "   RUN python -m venv /opt/venv",
         '   ENV PATH="/opt/venv/bin:$PATH"',
         "   Official Node.js images: https://hub.docker.com/_/node",
     ]
