@@ -159,8 +159,11 @@ def _get_docker_instructions(env: Environment) -> list[str]:
     if env.linux_distro == "alpine":
         lines.extend(
             [
-                "Add to your Dockerfile (Alpine):",
-                "   RUN apk add --no-cache nodejs npm",
+                "Start your Alpine Dockerfile from the official Node.js 24 image, then add Python:",
+                "   FROM node:24-alpine",
+                "   RUN apk add --no-cache python3 py3-pip",
+                "   RUN python3 -m venv /opt/venv",
+                '   ENV PATH="/opt/venv/bin:$PATH"',
             ]
         )
     elif env.linux_distro in ("ubuntu", "debian"):
@@ -328,10 +331,11 @@ def _get_alpine_instructions() -> list[str]:
     return [
         "ALPINE LINUX INSTALLATION:",
         "",
-        "   apk add --update nodejs npm",
+        "On an Alpine release whose repositories offer Node.js 24, run as root:",
+        "   apk add --no-cache 'nodejs~24' npm",
+        "   node --version",
         "",
-        "In Dockerfile:",
-        "   RUN apk add --no-cache nodejs npm",
+        "If apk cannot find Node.js 24, upgrade Alpine or use the official node:24-alpine container.",
     ]
 
 

@@ -47,7 +47,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
@@ -68,6 +70,41 @@ jobs:
       - name: Check GitHub workflows
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 
+      - name: Verify Alpine installation instructions
+        run: |
+          alpine_dir="$RUNNER_TEMP/promptfoo-alpine"
+          mkdir -p "$alpine_dir"
+          uv run python - <<'PY' > "$alpine_dir/Dockerfile"
+          from promptfoo.environment import Environment
+          from promptfoo.instructions import get_installation_instructions
+
+          instructions = get_installation_instructions(
+              Environment(os_type="linux", linux_distro="alpine", is_docker=True)
+          )
+          for line in instructions.splitlines():
+              command = line.strip()
+              if command.startswith(("FROM ", "RUN ", "ENV ")):
+                  print(command)
+          PY
+          cat >> "$alpine_dir/Dockerfile" <<'EOF'
+          RUN node --version | grep -E '^v24\.' \
+              && npm --version && npx --version && python --version && pip --version \
+              && python -c 'import sys; assert sys.prefix == "/opt/venv"'
+          EOF
+          docker build --progress=plain "$alpine_dir"
+          docker run --rm alpine:3.20 sh -ec '
+            apk update
+            apk add --no-cache nodejs npm
+            case "$(node --version)" in
+              v20.*) ;;
+              *) echo "Expected Alpine 3.20 to supply Node.js 20" >&2; exit 1 ;;
+            esac
+            if apk add --no-cache "nodejs~24" npm; then
+              echo "Alpine 3.20 unexpectedly installed Node.js 24" >&2
+              exit 1
+            fi
+          '
+
   type-check:
     name: Type Check (${{ matrix.type-checker }})
     runs-on: ubuntu-latest
@@ -76,7 +113,9 @@ jobs:
       matrix:
         type-checker: [mypy, pyright]
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
@@ -117,7 +156,9 @@ jobs:
           - python-version: "3.14"
             node-version: "24"
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
@@ -183,7 +224,9 @@ jobs:
         python-version: ["3.12"]
         node-version: ["22.22.0", "24"]
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
@@ -233,7 +276,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
@@ -244,6 +289,9 @@ jobs:
 
       - name: Build package
         run: uv build
+
+      - name: Check distribution metadata with Twine
+        run: uvx --from twine --constraints .github/requirements-twine.txt twine check --strict dist/*
 
       - name: Upload artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
