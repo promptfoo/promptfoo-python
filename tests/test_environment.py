@@ -13,8 +13,14 @@ def isolated_probes(monkeypatch: pytest.MonkeyPatch) -> None:
         "GITLAB_CI",
         "CIRCLECI",
         "JENKINS_URL",
+        "JENKINS_HOME",
         "BUILDKITE",
         "TF_BUILD",
+        "TEAMCITY_VERSION",
+        "TRAVIS",
+        "DRONE",
+        "BITBUCKET_BUILD_NUMBER",
+        "CONTINUOUS_INTEGRATION",
         "CI",
         "AWS_LAMBDA_FUNCTION_NAME",
         "FUNCTIONS_WORKER_RUNTIME",
@@ -101,7 +107,18 @@ def test_detects_wsl_only_on_linux(monkeypatch: pytest.MonkeyPatch, use_environm
 
 @pytest.mark.parametrize(
     "variable, expected",
-    [("GITHUB_ACTIONS", "GitHub Actions"), ("GITLAB_CI", "GitLab CI"), ("CIRCLECI", "CircleCI"), ("CI", "CI")],
+    [
+        ("GITHUB_ACTIONS", "GitHub Actions"),
+        ("GITLAB_CI", "GitLab CI"),
+        ("CIRCLECI", "CircleCI"),
+        ("JENKINS_HOME", "Jenkins"),
+        ("TEAMCITY_VERSION", "TeamCity"),
+        ("TRAVIS", "Travis CI"),
+        ("DRONE", "Drone CI"),
+        ("BITBUCKET_BUILD_NUMBER", "Bitbucket Pipelines"),
+        ("CONTINUOUS_INTEGRATION", "CI"),
+        ("CI", "CI"),
+    ],
 )
 def test_detects_ci_guidance(monkeypatch: pytest.MonkeyPatch, variable: str, expected: str) -> None:
     monkeypatch.setenv(variable, "1")

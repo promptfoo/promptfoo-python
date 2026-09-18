@@ -7,8 +7,12 @@ _NODE_DOWNLOAD = "https://nodejs.org/en/download"
 _NVM = "https://github.com/nvm-sh/nvm#installing-and-updating"
 _SERVERLESS = {
     "aws": ("AWS Lambda", "https://docs.aws.amazon.com/lambda/latest/dg/images-create.html"),
-    "google": ("Google Cloud Functions", "https://cloud.google.com/run/docs/runtimes/nodejs"),
-    "azure": ("Azure Functions", "https://learn.microsoft.com/en-us/azure/azure-functions/functions-reference-node"),
+    "google": ("Google Cloud Functions / Cloud Run", "https://docs.cloud.google.com/run/docs/building/containers"),
+    "azure": (
+        "Azure Functions",
+        "https://learn.microsoft.com/en-us/azure/azure-functions/functions-how-to-custom-container"
+        "?pivots=programming-language-python",
+    ),
 }
 
 
@@ -42,6 +46,8 @@ def _linux_instructions(env: Environment) -> list[str]:
             "   sudo alternatives --set node /usr/bin/node-24",
             "   node --version",
             "   https://docs.aws.amazon.com/linux/al2023/ug/nodejs.html",
+            f"   Without sudo, install nvm: {_NVM}",
+            "   Then run: nvm install 24",
         ]
     return [
         "LINUX: use a Node.js version manager or your distribution's instructions for Node.js 24.",
@@ -55,12 +61,20 @@ def get_installation_instructions(env: Environment) -> str:
     lines = [
         f"ERROR: promptfoo requires Node.js {MIN_NODE_VERSION_TEXT} or newer, but it was not found.",
         f"Install Node.js 24 LTS with npm: {_NODE_DOWNLOAD}",
-        "Verify with: node --version && npx --version",
+        "Verify with:",
+        "   node --version",
+        "   npx --version",
     ]
 
     if env.serverless and env.serverless in _SERVERLESS:
         name, documentation = _SERVERLESS[env.serverless]
-        lines += ["", f"{name}: use a deployment that includes both Node.js and Python.", f"   {documentation}"]
+        lines += [
+            "",
+            f"{name}: build and deploy a custom container that includes both Node.js and Python.",
+            "Install both runtimes when building the image; they cannot be installed in the running function.",
+            f"   {documentation}",
+        ]
+        return "\n".join(lines)
 
     if env.ci_platform == "GitHub Actions":
         lines += ["", "GITHUB ACTIONS: add Node.js to your workflow:", "   - uses: actions/setup-node@v7", "     with:"]

@@ -12,7 +12,8 @@ def test_every_platform_gets_the_runtime_requirement_and_a_working_fallback(plat
     assert f"requires Node.js {MIN_NODE_VERSION_TEXT} or newer" in output
     assert "Node.js 24 LTS with npm" in output
     assert "https://nodejs.org/en/download" in output
-    assert "node --version && npx --version" in output
+    assert "   node --version\n   npx --version" in output
+    assert "&&" not in output
     assert "DIRECT USAGE after installing Node.js: npx promptfoo@latest eval" in output
 
 
@@ -48,6 +49,8 @@ def test_amazon_linux_2023_installs_both_versioned_packages_and_selects_the_acti
     assert "sudo alternatives --set node /usr/bin/node-24" in output
     assert "omit sudo when running as root" in output
     assert "https://docs.aws.amazon.com/linux/al2023/ug/nodejs.html" in output
+    assert "Without sudo, install nvm: https://github.com/nvm-sh/nvm#installing-and-updating" in output
+    assert "nvm install 24" in output
     assert "dnf install -y nodejs\n" not in output
 
 
@@ -78,16 +81,28 @@ def test_other_ci_uses_the_provider_setup_instructions() -> None:
 
 
 @pytest.mark.parametrize(
-    "provider, label, host",
+    "provider, label, documentation",
     [
-        ("aws", "AWS Lambda", "docs.aws.amazon.com"),
-        ("google", "Google Cloud Functions", "cloud.google.com"),
-        ("azure", "Azure Functions", "learn.microsoft.com"),
+        ("aws", "AWS Lambda", "docs.aws.amazon.com/lambda/latest/dg/images-create.html"),
+        ("google", "Google Cloud Functions / Cloud Run", "docs.cloud.google.com/run/docs/building/containers"),
+        (
+            "azure",
+            "Azure Functions",
+            "learn.microsoft.com/en-us/azure/azure-functions/functions-how-to-custom-container",
+        ),
     ],
 )
-def test_serverless_links_explain_the_need_for_both_runtimes(provider: str, label: str, host: str) -> None:
-    output = get_installation_instructions(Environment(os_type="linux", serverless=provider))
+def test_serverless_links_explain_how_to_build_both_runtimes(provider: str, label: str, documentation: str) -> None:
+    output = get_installation_instructions(
+        Environment(
+            os_type="linux", linux_distro="amzn", linux_distro_version="2023", is_docker=True, serverless=provider
+        )
+    )
 
-    assert f"{label}: use a deployment that includes both Node.js and Python" in output
-    assert host in output
+    assert f"{label}: build and deploy a custom container that includes both Node.js and Python" in output
+    assert documentation in output
     assert "https://nodejs.org/en/download" in output
+    assert "when building the image" in output
+    assert "sudo" not in output
+    assert "nvm" not in output
+    assert "npx promptfoo" not in output

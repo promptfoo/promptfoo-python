@@ -56,8 +56,14 @@ def _ci_platform() -> str | None:
         ("GITLAB_CI", "GitLab CI"),
         ("CIRCLECI", "CircleCI"),
         ("JENKINS_URL", "Jenkins"),
+        ("JENKINS_HOME", "Jenkins"),
         ("BUILDKITE", "Buildkite"),
         ("TF_BUILD", "Azure Pipelines"),
+        ("TEAMCITY_VERSION", "TeamCity"),
+        ("TRAVIS", "Travis CI"),
+        ("DRONE", "Drone CI"),
+        ("BITBUCKET_BUILD_NUMBER", "Bitbucket Pipelines"),
+        ("CONTINUOUS_INTEGRATION", "CI"),
         ("CI", "CI"),
     ):
         if os.environ.get(variable):
