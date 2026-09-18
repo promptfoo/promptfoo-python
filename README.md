@@ -12,7 +12,7 @@
 
 > **📦 About this Python package**
 >
-> This is a lightweight wrapper that installs promptfoo via `pip`. It requires **Node.js 20+** and executes `npx promptfoo@latest` under the hood.
+> This is a lightweight wrapper that installs promptfoo via `pip`. It requires **Node.js 22.22.0 or newer** and executes `npx promptfoo@latest` under the hood.
 >
 > **💡 If you have Node.js installed**, we recommend using `npx promptfoo@latest` directly for better performance:
 >
@@ -48,7 +48,7 @@
 ### Requirements
 
 - **Python 3.10+** (for this wrapper)
-- **Node.js 20+** (required to run promptfoo)
+- **Node.js 22.22.0 or newer** (required to run promptfoo; Node.js 24 LTS is recommended)
 
 ### Install from PyPI
 
@@ -116,7 +116,7 @@ It also can generate [security vulnerability reports](https://www.promptfoo.dev/
 
 This Python package is a thin wrapper that:
 
-1. Checks if Node.js is installed
+1. Checks that a supported Node.js version is installed
 2. Executes `npx promptfoo@latest <your-args>` (or uses globally installed promptfoo if available)
 3. Passes through all arguments and environment variables
 4. Returns the same exit code
@@ -176,12 +176,12 @@ promptfoo eval
 
 ### "ERROR: promptfoo requires Node.js"
 
-The wrapper needs Node.js to run. Install it:
+The wrapper needs Node.js 22.22.0 or newer to run. Install a supported version, then verify it with `node --version`:
 
 - **macOS**: `brew install node`
-- **Ubuntu/Debian**: `sudo apt install nodejs npm`
+- **Ubuntu/Debian**: Use [NodeSource](https://github.com/nodesource/distributions) or [nvm](https://github.com/nvm-sh/nvm); some distribution repositories still offer older versions
 - **Windows**: Download from [nodejs.org](https://nodejs.org/)
-- **Any OS**: Use [nvm](https://github.com/nvm-sh/nvm)
+- **macOS/Linux**: With [nvm](https://github.com/nvm-sh/nvm), run `nvm install 24`
 
 ### Slow First Run
 

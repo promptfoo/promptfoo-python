@@ -2,9 +2,6 @@ name: Python CI
 
 on:
   pull_request:
-    paths-ignore:
-      - "**.md"
-      - "LICENSE"
   push:
     branches:
       - main
@@ -13,11 +10,38 @@ on:
 permissions:
   contents: read
 
+env:
+  PROMPTFOO_DISABLE_TELEMETRY: "1"
+  PROMPTFOO_DISABLE_UPDATE: "1"
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  resolve-promptfoo:
+    name: Resolve promptfoo version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.promptfoo.outputs.version }}
+    steps:
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Resolve the published promptfoo version once for every test job
+        id: promptfoo
+        shell: bash
+        run: |
+          version=$(npm view promptfoo@latest version)
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Unexpected promptfoo version: $version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
   lint:
     name: Lint and Format
     runs-on: ubuntu-latest
@@ -33,13 +57,16 @@ jobs:
         run: uv python pin 3.12
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --locked --extra dev
 
       - name: Lint with Ruff
         run: uv run ruff check src/
 
       - name: Check formatting
         run: uv run ruff format --check src/
+
+      - name: Check GitHub workflows
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 
   type-check:
     name: Type Check (${{ matrix.type-checker }})
@@ -59,7 +86,7 @@ jobs:
         run: uv python pin 3.12
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --locked --extra dev
 
       - name: Type check with mypy
         if: matrix.type-checker == 'mypy'
@@ -70,22 +97,31 @@ jobs:
         run: uv run pyright src/promptfoo/
 
   test:
-    name: Test (py${{ matrix.python-version }}, ${{ matrix.os }})
+    name: Test (py${{ matrix.python-version }}, node${{ matrix.node-version }}, ${{ matrix.os }})
+    needs: resolve-promptfoo
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    env:
+      PROMPTFOO_VERSION: ${{ needs.resolve-promptfoo.outputs.version }}
     strategy:
+      fail-fast: false
       matrix:
         # Temporarily excluding macos-latest due to GitHub Actions runner resource constraints
         # causing BlockingIOError [Errno 35] when spawning subprocess
         os: [ubuntu-latest, windows-latest]
         # Test only min and max supported Python versions for efficiency
         python-version: ["3.10", "3.14"]
+        include:
+          - python-version: "3.10"
+            node-version: "22.22.0"
+          - python-version: "3.14"
+            node-version: "24"
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: "24"
+          node-version: ${{ matrix.node-version }}
           package-manager-cache: false
 
       - name: Configure npm on Windows
@@ -100,7 +136,8 @@ jobs:
           $globalPrefix | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Install promptfoo globally
-        run: npm install -g promptfoo@latest
+        shell: bash
+        run: npm install --global "promptfoo@$PROMPTFOO_VERSION"
         env:
           NODE_OPTIONS: --max-old-space-size=4096
 
@@ -112,7 +149,10 @@ jobs:
         run: uv python pin ${{ matrix.python-version }}
 
       - name: Install package with dev dependencies
-        run: uv sync --extra dev
+        run: uv sync --locked --extra dev
+
+      - name: Verify the wrapper can find the global npm installation
+        run: uv run python -c "from promptfoo.cli import _find_external_promptfoo; path = _find_external_promptfoo(); print(path); assert path is not None"
 
       - name: Run unit tests
         run: uv run pytest tests/ -v -m 'not smoke'
@@ -127,22 +167,27 @@ jobs:
         run: uv run python -c "from promptfoo.cli import check_node_installed, check_npx_installed; assert check_node_installed(); assert check_npx_installed()"
 
   test-npx-fallback:
-    name: Test npx fallback (py${{ matrix.python-version }}, ${{ matrix.os }})
+    name: Test npx fallback (py${{ matrix.python-version }}, node${{ matrix.node-version }}, ${{ matrix.os }})
+    needs: resolve-promptfoo
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    env:
+      PROMPTFOO_VERSION: ${{ needs.resolve-promptfoo.outputs.version }}
     strategy:
+      fail-fast: false
       matrix:
         # Test npx fallback (without global install)
         # Temporarily excluding macos-latest due to GitHub Actions runner resource constraints
         os: [ubuntu-latest, windows-latest]
         # Use middle-version Python for this test
         python-version: ["3.12"]
+        node-version: ["22.22.0", "24"]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: "24"
+          node-version: ${{ matrix.node-version }}
           package-manager-cache: false
 
       - name: Configure npm on Windows
@@ -166,7 +211,10 @@ jobs:
         run: uv python pin ${{ matrix.python-version }}
 
       - name: Install package with dev dependencies
-        run: uv sync --extra dev
+        run: uv sync --locked --extra dev
+
+      - name: Verify the wrapper must fall back to npx
+        run: uv run python -c "from promptfoo.cli import _find_external_promptfoo, check_npx_installed; path = _find_external_promptfoo(); print(path); assert path is None; assert check_npx_installed()"
 
       - name: Run unit tests
         run: uv run pytest tests/ -v -m 'not smoke'
@@ -202,36 +250,17 @@ jobs:
         with:
           name: dist
           path: dist/
+          if-no-files-found: error
 
   ci-success:
     name: CI Success
-    needs: [lint, type-check, test, test-npx-fallback, build]
+    needs: [resolve-promptfoo, lint, type-check, test, test-npx-fallback, build]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Check if all jobs succeeded
+        env:
+          JOB_RESULTS: ${{ join(needs.*.result, ',') }}
         run: |
-          LINT_RESULT="${{ needs.lint.result }}"
-          TYPE_CHECK_RESULT="${{ needs.type-check.result }}"
-          TEST_RESULT="${{ needs.test.result }}"
-          TEST_NPX_FALLBACK_RESULT="${{ needs.test-npx-fallback.result }}"
-          BUILD_RESULT="${{ needs.build.result }}"
-
-          echo "Job results:"
-          echo "  lint: $LINT_RESULT"
-          echo "  type-check: $TYPE_CHECK_RESULT"
-          echo "  test: $TEST_RESULT"
-          echo "  test-npx-fallback: $TEST_NPX_FALLBACK_RESULT"
-          echo "  build: $BUILD_RESULT"
-
-          if [[ "$LINT_RESULT" == "failure" || "$LINT_RESULT" == "cancelled" ||
-                "$TYPE_CHECK_RESULT" == "failure" || "$TYPE_CHECK_RESULT" == "cancelled" ||
-                "$TEST_RESULT" == "failure" || "$TEST_RESULT" == "cancelled" ||
-                "$TEST_NPX_FALLBACK_RESULT" == "failure" || "$TEST_NPX_FALLBACK_RESULT" == "cancelled" ||
-                "$BUILD_RESULT" == "failure" || "$BUILD_RESULT" == "cancelled" ]]; then
-            echo "Some CI checks failed!"
-            exit 1
-          else
-            echo "All CI checks passed!"
-            exit 0
-          fi
+          echo "Job results: $JOB_RESULTS"
+          [[ "$JOB_RESULTS" =~ ^success(,success)*$ ]]

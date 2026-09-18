@@ -31,7 +31,8 @@ jobs:
         id: release
         if: github.event_name == 'push'
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # A dedicated token lets the resulting pull_request run start without manual workflow approval.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
 
   build:
     if: |
@@ -54,7 +55,15 @@ jobs:
         run: uv python pin 3.12
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        env:
+          REPUBLISH_TAG: ${{ inputs.tag }}
+        run: |
+          if [[ -n "$REPUBLISH_TAG" ]]; then
+            # Historical tags predate keeping the package version in uv.lock in sync.
+            uv sync --extra dev
+          else
+            uv sync --locked --extra dev
+          fi
 
       - name: Run unit tests
         run: uv run pytest -m 'not smoke' -q
@@ -67,7 +76,7 @@ jobs:
           TAG: ${{ needs.release-please.outputs.tag_name }}
         run: |
           EXPECTED_VERSION="${TAG#promptfoo-v}"
-          if ls dist/*-${EXPECTED_VERSION}-*.whl 1> /dev/null 2>&1; then
+          if compgen -G "dist/*-${EXPECTED_VERSION}-*.whl" > /dev/null; then
             echo "✓ Package version ${EXPECTED_VERSION} matches release tag ${TAG}"
           else
             echo "ERROR: Package version mismatch!"
@@ -82,6 +91,7 @@ jobs:
         with:
           name: dist
           path: dist/
+          if-no-files-found: error
 
   publish-pypi:
     if: |
