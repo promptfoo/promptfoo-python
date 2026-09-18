@@ -24,8 +24,12 @@ def isolated_probes(monkeypatch: pytest.MonkeyPatch) -> None:
         "CI",
         "AWS_LAMBDA_FUNCTION_NAME",
         "FUNCTIONS_WORKER_RUNTIME",
+        "WEBSITE_INSTANCE_ID",
+        "WEBSITE_SITE_NAME",
+        "CONTAINER_APP_NAME",
         "FUNCTION_TARGET",
         "FUNCTION_NAME",
+        "K_SERVICE",
         "WSL_DISTRO_NAME",
         "WSL_INTEROP",
         "KUBERNETES_SERVICE_HOST",
@@ -126,11 +130,32 @@ def test_detects_ci_guidance(monkeypatch: pytest.MonkeyPatch, variable: str, exp
 
 
 @pytest.mark.parametrize(
-    "variable, expected",
-    [("AWS_LAMBDA_FUNCTION_NAME", "aws"), ("FUNCTIONS_WORKER_RUNTIME", "azure"), ("FUNCTION_TARGET", "google")],
+    "variables, expected",
+    [
+        (["AWS_LAMBDA_FUNCTION_NAME"], "aws"),
+        (["FUNCTIONS_WORKER_RUNTIME", "WEBSITE_INSTANCE_ID"], "azure"),
+        (["FUNCTIONS_WORKER_RUNTIME", "CONTAINER_APP_NAME"], "azure"),
+        (["FUNCTION_TARGET", "K_SERVICE"], "google"),
+        (["FUNCTION_NAME"], "google"),
+    ],
 )
 def test_detects_serverless_from_provider_supplied_variables(
-    monkeypatch: pytest.MonkeyPatch, variable: str, expected: str
+    monkeypatch: pytest.MonkeyPatch, variables: list[str], expected: str
 ) -> None:
-    monkeypatch.setenv(variable, "configured")
+    for variable in variables:
+        monkeypatch.setenv(variable, "configured")
     assert environment._serverless() == expected
+
+
+@pytest.mark.parametrize("variable", ["FUNCTION_TARGET", "FUNCTIONS_WORKER_RUNTIME", "K_SERVICE"])
+def test_local_function_framework_settings_do_not_suppress_host_guidance(
+    monkeypatch: pytest.MonkeyPatch, variable: str
+) -> None:
+    monkeypatch.setattr(environment.sys, "platform", "darwin")
+    monkeypatch.setenv(variable, "configured")
+
+    from promptfoo.instructions import get_installation_instructions
+
+    output = get_installation_instructions(environment.detect_environment())
+    assert "brew install node" in output
+    assert "custom container" not in output

@@ -74,9 +74,11 @@ def _ci_platform() -> str | None:
 def _serverless() -> str | None:
     if os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
         return "aws"
-    if os.environ.get("FUNCTIONS_WORKER_RUNTIME"):
+    if os.environ.get("FUNCTIONS_WORKER_RUNTIME") and any(
+        os.environ.get(name) for name in ("WEBSITE_INSTANCE_ID", "WEBSITE_SITE_NAME", "CONTAINER_APP_NAME")
+    ):
         return "azure"
-    if os.environ.get("FUNCTION_TARGET") or os.environ.get("FUNCTION_NAME"):
+    if os.environ.get("FUNCTION_NAME") or (os.environ.get("FUNCTION_TARGET") and os.environ.get("K_SERVICE")):
         return "google"
     return None
 

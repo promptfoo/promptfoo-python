@@ -71,28 +71,34 @@ jobs:
       - name: Check GitHub workflows
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 
-      - name: Verify Alpine installation instructions
+      - name: Verify container installation instructions
         run: |
-          alpine_dir="$RUNNER_TEMP/promptfoo-alpine"
-          mkdir -p "$alpine_dir"
-          uv run python - <<'PY' > "$alpine_dir/Dockerfile"
+          instruction_dir="$RUNNER_TEMP/promptfoo-docker-help"
+          uv run python - "$instruction_dir" <<'PY'
+          import sys
+          from pathlib import Path
+
           from promptfoo.environment import Environment
           from promptfoo.instructions import get_installation_instructions
 
-          instructions = get_installation_instructions(
-              Environment(os_type="linux", linux_distro="alpine", is_docker=True)
-          )
-          for line in instructions.splitlines():
-              command = line.strip()
-              if command.startswith(("FROM ", "RUN ", "ENV ")):
-                  print(command)
+          for distro in ("alpine", "debian"):
+              instructions = get_installation_instructions(
+                  Environment(os_type="linux", linux_distro=distro, is_docker=True)
+              )
+              commands = [line.strip() for line in instructions.splitlines()]
+              commands = [command for command in commands if command.startswith(("FROM ", "RUN ", "ENV "))]
+              directory = Path(sys.argv[1]) / distro
+              directory.mkdir(parents=True, exist_ok=True)
+              (directory / "Dockerfile").write_text("\n".join(commands) + "\n")
           PY
-          cat >> "$alpine_dir/Dockerfile" <<'EOF'
+          for distro in alpine debian; do
+            cat >> "$instruction_dir/$distro/Dockerfile" <<'EOF'
           RUN node --version | grep -E '^v24\.' \
               && npm --version && npx --version && python --version && pip --version \
               && python -c 'import sys; assert sys.prefix == "/opt/venv"'
           EOF
-          docker build --progress=plain "$alpine_dir"
+            docker build --progress=plain "$instruction_dir/$distro"
+          done
           docker run --rm alpine:3.20 sh -ec '
             apk update
             apk add --no-cache nodejs npm

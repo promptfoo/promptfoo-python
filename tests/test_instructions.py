@@ -1,3 +1,8 @@
+import re
+import shutil
+import subprocess
+import sys
+
 import pytest
 
 from promptfoo.environment import Environment
@@ -12,8 +17,9 @@ def test_every_platform_gets_the_runtime_requirement_and_a_working_fallback(plat
     assert f"requires Node.js {MIN_NODE_VERSION_TEXT} or newer" in output
     assert "Node.js 24 LTS with npm" in output
     assert "https://nodejs.org/en/download" in output
-    assert "   node --version\n   npx --version" in output
-    assert "&&" not in output
+    npx = "npx.cmd" if platform == "windows" else "npx"
+    assert f"   node --version\n   {npx} --version" in output
+    assert "node --version &&" not in output
     assert "DIRECT USAGE after installing Node.js: npx promptfoo@latest eval" in output
 
 
@@ -23,6 +29,26 @@ def test_every_platform_gets_the_runtime_requirement_and_a_working_fallback(plat
 )
 def test_common_platforms_get_one_relevant_installation_hint(platform: str, hint: str) -> None:
     assert hint in get_installation_instructions(Environment(os_type=platform))
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Tests native Windows PowerShell's restricted execution policy")
+def test_windows_verification_commands_run_with_powershell_scripts_disabled() -> None:
+    powershell = shutil.which("powershell")
+    assert powershell
+    instructions = get_installation_instructions(Environment(os_type="windows")).splitlines()
+    start = instructions.index("Verify with:") + 1
+    commands = [line.strip() for line in instructions[start : start + 2]]
+    script = "; ".join(["$ErrorActionPreference = 'Stop'", *commands, "if ($LASTEXITCODE) { exit $LASTEXITCODE }"])
+
+    result = subprocess.run(
+        [powershell, "-NoProfile", "-ExecutionPolicy", "Restricted", "-Command", script],
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert len([line for line in result.stdout.splitlines() if re.fullmatch(r"v?\d+\.\d+\.\d+", line)]) == 2
 
 
 def test_alpine_dockerfile_contains_only_the_verified_setup_steps() -> None:
@@ -69,7 +95,10 @@ def test_ci_container_and_wsl_hints_can_coexist() -> None:
     )
 
     assert "- uses: actions/setup-node@v7\n     with:\n       node-version: '24'" in output
-    assert "keep the Node and Python base distributions compatible" in output
+    assert "FROM node:24-bookworm-slim" in output
+    assert "apt-get install -y --no-install-recommends python3 python3-venv" in output
+    assert 'ENV PATH="/opt/venv/bin:$PATH"' in output
+    assert "nvm install" not in output
     assert "https://hub.docker.com/_/node" in output
     assert "install Node.js inside your Linux distribution" in output
 
@@ -81,18 +110,31 @@ def test_other_ci_uses_the_provider_setup_instructions() -> None:
 
 
 @pytest.mark.parametrize(
-    "provider, label, documentation",
+    "provider, label, documentation, hosting",
     [
-        ("aws", "AWS Lambda", "docs.aws.amazon.com/lambda/latest/dg/images-create.html"),
-        ("google", "Google Cloud Functions / Cloud Run", "docs.cloud.google.com/run/docs/building/containers"),
+        (
+            "aws",
+            "AWS Lambda",
+            "docs.aws.amazon.com/lambda/latest/dg/images-create.html",
+            "create a new image-based function",
+        ),
+        (
+            "google",
+            "Google Cloud Functions / Cloud Run",
+            "docs.cloud.google.com/run/docs/building/containers",
+            "first-generation functions, must move to a Cloud Run service",
+        ),
         (
             "azure",
             "Azure Functions",
             "learn.microsoft.com/en-us/azure/azure-functions/functions-how-to-custom-container",
+            "Flex Consumption do not accept custom images. Move to Azure Container Apps",
         ),
     ],
 )
-def test_serverless_links_explain_how_to_build_both_runtimes(provider: str, label: str, documentation: str) -> None:
+def test_serverless_links_explain_how_to_build_both_runtimes(
+    provider: str, label: str, documentation: str, hosting: str
+) -> None:
     output = get_installation_instructions(
         Environment(
             os_type="linux", linux_distro="amzn", linux_distro_version="2023", is_docker=True, serverless=provider
@@ -101,6 +143,7 @@ def test_serverless_links_explain_how_to_build_both_runtimes(provider: str, labe
 
     assert f"{label}: build and deploy a custom container that includes both Node.js and Python" in output
     assert documentation in output
+    assert hosting in output
     assert "https://nodejs.org/en/download" in output
     assert "when building the image" in output
     assert "sudo" not in output

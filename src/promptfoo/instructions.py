@@ -6,10 +6,21 @@ from .node import MIN_NODE_VERSION_TEXT
 _NODE_DOWNLOAD = "https://nodejs.org/en/download"
 _NVM = "https://github.com/nvm-sh/nvm#installing-and-updating"
 _SERVERLESS = {
-    "aws": ("AWS Lambda", "https://docs.aws.amazon.com/lambda/latest/dg/images-create.html"),
-    "google": ("Google Cloud Functions / Cloud Run", "https://docs.cloud.google.com/run/docs/building/containers"),
+    "aws": (
+        "AWS Lambda",
+        "For an existing zip-based function, create a new image-based function.",
+        "https://docs.aws.amazon.com/lambda/latest/dg/images-create.html",
+    ),
+    "google": (
+        "Google Cloud Functions / Cloud Run",
+        "Functions deployed from source, including first-generation functions, must move to a Cloud Run service "
+        "to deploy a custom image.",
+        "https://docs.cloud.google.com/run/docs/building/containers",
+    ),
     "azure": (
         "Azure Functions",
+        "Consumption and Flex Consumption do not accept custom images. Move to Azure Container Apps "
+        "or a Linux Premium/Dedicated plan.",
         "https://learn.microsoft.com/en-us/azure/azure-functions/functions-how-to-custom-container"
         "?pivots=programming-language-python",
     ),
@@ -26,7 +37,12 @@ def _container_instructions(env: Environment) -> list[str]:
             '   ENV PATH="/opt/venv/bin:$PATH"',
         ]
     return [
-        "CONTAINER: include Node.js 24 in your image; keep the Node and Python base distributions compatible.",
+        "CONTAINER: start from the official Node.js 24 Debian image and add Python:",
+        "   FROM node:24-bookworm-slim",
+        "   RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv "
+        "&& rm -rf /var/lib/apt/lists/*",
+        "   RUN python3 -m venv /opt/venv",
+        '   ENV PATH="/opt/venv/bin:$PATH"',
         "   Official Node.js images: https://hub.docker.com/_/node",
     ]
 
@@ -63,14 +79,15 @@ def get_installation_instructions(env: Environment) -> str:
         f"Install Node.js 24 LTS with npm: {_NODE_DOWNLOAD}",
         "Verify with:",
         "   node --version",
-        "   npx --version",
+        "   npx.cmd --version" if env.os_type == "windows" else "   npx --version",
     ]
 
     if env.serverless and env.serverless in _SERVERLESS:
-        name, documentation = _SERVERLESS[env.serverless]
+        name, hosting, documentation = _SERVERLESS[env.serverless]
         lines += [
             "",
             f"{name}: build and deploy a custom container that includes both Node.js and Python.",
+            hosting,
             "Install both runtimes when building the image; they cannot be installed in the running function.",
             f"   {documentation}",
         ]
@@ -87,7 +104,7 @@ def get_installation_instructions(env: Environment) -> str:
     if env.is_wsl:
         lines += ["", "WSL: install Node.js inside your Linux distribution, not on the Windows host."]
 
-    if env.os_type == "linux":
+    if env.os_type == "linux" and (not env.is_docker or env.linux_distro == "alpine"):
         lines += ["", *_linux_instructions(env)]
     elif env.os_type == "darwin":
         lines += ["", "MACOS: install Node.js with Homebrew (`brew install node`) or the installer linked above."]
