@@ -147,16 +147,17 @@ Tests run on multiple Python versions (3.10, 3.14) and OSes (Ubuntu, Windows), w
 
 ### Release Workflow (`.github/workflows/release-please.yml`)
 
-Triggered on push to main:
+Triggered on pushes to main, manual tag republishing, and PRs that change the release workflow or its configuration:
 
-1. **release-please job**: Creates/updates release PR
-2. **build job**: (on release PR merge)
-   - Builds Python package with `uv build`
-   - Verifies package version matches release
+1. **release-please job**: Creates or updates release PRs on pushes to main
+2. **build job**: Runs for releases, manual republishing, and the matching PRs
+   - Runs unit tests and builds the Python package with `uv build`
+   - Checks distribution metadata and verifies the package version against the tag for releases
    - Uploads build artifacts
-3. **publish-pypi job**: (on release PR merge)
+3. **publish-pypi job**: Runs only for releases or manual tag republishing
    - Downloads build artifacts
    - Publishes to PyPI using OIDC (no tokens!)
+4. **validate-action job**: Starts release-please in read-only mode on the matching PRs
 
 The required Python CI check must come from a `pull_request` run. If `RELEASE_PLEASE_TOKEN`
 is configured with access to create and update release PRs, GitHub starts those runs automatically.

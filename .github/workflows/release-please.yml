@@ -41,34 +41,48 @@ jobs:
 
   build:
     if: |
-      inputs.tag != '' ||
-      needs.release-please.outputs.release_created == 'true'
+      !cancelled() &&
+      (github.event_name == 'pull_request' ||
+        (needs.release-please.result == 'success' &&
+          (inputs.tag != '' || needs.release-please.outputs.release_created == 'true')))
     needs: release-please
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    defaults:
+      run:
+        working-directory: package-source
     steps:
       - name: Check out publishing tool requirements from the workflow revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.workflow_sha }}
+          path: publishing-tools
           persist-credentials: false
           sparse-checkout: .github/requirements-twine.txt
           sparse-checkout-cone-mode: false
 
       - name: Save publishing tool requirements for historical tags
-        run: cp .github/requirements-twine.txt "$RUNNER_TEMP/requirements-twine.txt"
+        working-directory: ${{ github.workspace }}
+        run: cp publishing-tools/.github/requirements-twine.txt "$RUNNER_TEMP/requirements-twine.txt"
 
-      - name: Check out the release tag
+      - name: Check out the package source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
+          ref: ${{ github.event_name == 'pull_request' && github.sha || needs.release-please.outputs.tag_name }}
+          path: package-source
           persist-credentials: false
+
+      - name: Verify the package source and publishing tool requirements are available
+        run: |
+          test -f pyproject.toml
+          test -f "$RUNNER_TEMP/requirements-twine.txt"
 
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           version: "0.12.17"
           enable-cache: auto
+          working-directory: package-source
 
       - name: Pin Python version
         run: uv python pin 3.12
@@ -94,6 +108,7 @@ jobs:
         run: uvx --from twine --constraints "$RUNNER_TEMP/requirements-twine.txt" twine check --strict dist/*
 
       - name: Verify package version matches release tag
+        if: github.event_name != 'pull_request'
         env:
           TAG: ${{ needs.release-please.outputs.tag_name }}
         run: |
@@ -112,13 +127,13 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: dist
-          path: dist/
+          path: package-source/dist/
           if-no-files-found: error
 
   publish-pypi:
     if: |
-      inputs.tag != '' ||
-      needs.release-please.outputs.release_created == 'true'
+      github.event_name != 'pull_request' &&
+      (inputs.tag != '' || needs.release-please.outputs.release_created == 'true')
     needs: [build, release-please]
     runs-on: ubuntu-latest
     environment:
