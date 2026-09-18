@@ -12,7 +12,7 @@ def test_every_platform_gets_the_runtime_requirement_and_a_working_fallback(plat
     assert f"requires Node.js {MIN_NODE_VERSION_TEXT} or newer" in output
     assert "Node.js 24 LTS with npm" in output
     assert "https://nodejs.org/en/download" in output
-    npx = "npx.cmd" if platform == "windows" else "npx"
+    npx = "cmd /d /c npx" if platform == "windows" else "npx"
     assert f"   node --version\n   {npx} --version" in output
     assert "node --version &&" not in output
     assert "DIRECT USAGE after installing Node.js: npx promptfoo@latest eval" in output
@@ -47,9 +47,11 @@ def test_amazon_linux_2023_installs_both_versioned_packages_and_selects_the_acti
     )
 
     assert "sudo dnf install -y nodejs24 nodejs24-npm" in output
-    assert "sudo alternatives --set node /usr/bin/node-24" in output
+    assert "sudo /usr/sbin/alternatives --set node /usr/bin/node-24" in output
     assert "omit sudo when running as root" in output
     assert "https://docs.aws.amazon.com/linux/al2023/ug/nodejs.html" in output
+    assert "2023.9.20251110" in output
+    assert "dnf --releasever=latest install" in output
     assert "Without sudo, install nvm: https://github.com/nvm-sh/nvm#installing-and-updating" in output
     assert "nvm install 24" in output
     assert "dnf install -y nodejs\n" not in output
@@ -82,6 +84,9 @@ def test_ci_container_and_wsl_hints_can_coexist() -> None:
     assert "Keep the second FROM set to your existing image and Python environment" in output
     assert "COPY --from=node /usr/local/bin/node /usr/local/bin/node" in output
     assert "npm/bin/npx-cli.js /usr/local/bin/npx" in output
+    assert "/usr/local/bin/node /usr/bin/node" in output
+    assert "/usr/local/bin/npm /usr/bin/npm" in output
+    assert "/usr/local/bin/npx /usr/bin/npx" in output
     assert "venv" not in output
     assert "ENV PATH" not in output
     assert "nvm install" not in output
@@ -93,7 +98,7 @@ def test_ci_container_and_wsl_hints_can_coexist() -> None:
     ("distribution", "version", "command"),
     [
         ("ubuntu", "24.04", "https://deb.nodesource.com/setup_24.x"),
-        ("amzn", "2023", "dnf install -y nodejs24 nodejs24-npm"),
+        ("amzn", "2023", "dnf --releasever=latest install -y nodejs24 nodejs24-npm"),
     ],
 )
 def test_non_bookworm_containers_keep_their_original_base(distribution: str, version: str, command: str) -> None:
@@ -104,6 +109,9 @@ def test_non_bookworm_containers_keep_their_original_base(distribution: str, ver
     assert command in output
     assert "FROM python:" not in output
     assert "bookworm" not in output
+    if distribution == "amzn":
+        assert "/usr/sbin/alternatives --set node" in output
+        assert "2023.9.20251110" in output
 
 
 def test_unknown_container_does_not_claim_to_be_bookworm() -> None:

@@ -39,8 +39,10 @@ def _container_instructions(env: Environment) -> list[str]:
             "   FROM python:3.12-slim-bookworm",
             "   COPY --from=node /usr/local/bin/node /usr/local/bin/node",
             "   COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules",
-            "   RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm "
-            "&& ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx",
+            "   RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm "
+            "&& ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx",
+            "   RUN ln -sf /usr/local/bin/node /usr/bin/node && ln -sf /usr/local/bin/npm /usr/bin/npm "
+            "&& ln -sf /usr/local/bin/npx /usr/bin/npx",
             "   Official Node.js images: https://hub.docker.com/_/node",
         ]
     if env.linux_distro == "ubuntu":
@@ -55,8 +57,12 @@ def _container_instructions(env: Environment) -> list[str]:
     if env.linux_distro == "amzn" and env.linux_distro_version == "2023":
         return [
             "AMAZON LINUX 2023 CONTAINER: keep your existing FROM and install Node.js 24 as root:",
-            "   RUN dnf install -y nodejs24 nodejs24-npm && alternatives --set node /usr/bin/node-24 && dnf clean all",
+            "   RUN dnf --releasever=latest install -y nodejs24 nodejs24-npm "
+            "&& /usr/sbin/alternatives --set node /usr/bin/node-24 && dnf clean all",
+            "Node 24 requires repository release 2023.9.20251110 or newer; replace latest with your approved recent "
+            "snapshot, or update an older base image before installing.",
             "   https://docs.aws.amazon.com/linux/al2023/ug/nodejs.html",
+            "   https://docs.aws.amazon.com/linux/al2023/ug/managing-repos-os-updates.html",
         ]
     return [
         "CONTAINER: keep your existing base image and install Node.js 24 with npm during the image build.",
@@ -77,9 +83,11 @@ def _linux_instructions(env: Environment) -> list[str]:
         return [
             "AMAZON LINUX 2023: install and select Node.js 24 (omit sudo when running as root):",
             "   sudo dnf install -y nodejs24 nodejs24-npm",
-            "   sudo alternatives --set node /usr/bin/node-24",
+            "   sudo /usr/sbin/alternatives --set node /usr/bin/node-24",
             "   node --version",
             "   https://docs.aws.amazon.com/linux/al2023/ug/nodejs.html",
+            "If your pinned repository is older than 2023.9.20251110, update the base/repository or install from a "
+            "newer approved snapshot: sudo dnf --releasever=latest install -y nodejs24 nodejs24-npm",
             f"   Without sudo, install nvm: {_NVM}",
             "   Then run: nvm install 24",
         ]
@@ -97,7 +105,7 @@ def get_installation_instructions(env: Environment) -> str:
         f"Install Node.js 24 LTS with npm: {_NODE_DOWNLOAD}",
         "Verify with:",
         "   node --version",
-        "   npx.cmd --version" if env.os_type == "windows" else "   npx --version",
+        "   cmd /d /c npx --version" if env.os_type == "windows" else "   npx --version",
     ]
 
     if env.serverless == "aws":
