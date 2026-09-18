@@ -147,7 +147,7 @@ Tests run on multiple Python versions (3.10, 3.14) and OSes (Ubuntu, Windows), w
 
 Triggered on push to main:
 
-1. **release-please job**: Creates/updates release PR and dispatches its required Python CI workflow
+1. **release-please job**: Creates/updates release PR
 2. **build job**: (on release PR merge)
    - Builds Python package with `uv build`
    - Verifies package version matches release
@@ -155,6 +155,11 @@ Triggered on push to main:
 3. **publish-pypi job**: (on release PR merge)
    - Downloads build artifacts
    - Publishes to PyPI using OIDC (no tokens!)
+
+The required Python CI check must come from a `pull_request` run. If `RELEASE_PLEASE_TOKEN`
+is configured with access to create and update release PRs, GitHub starts those runs automatically.
+With the default workflow token, a maintainer must use **Approve workflows to run** on the release PR.
+Manually dispatching the Python CI workflow can help diagnose problems, but its checks do not satisfy branch protection.
 
 ### OIDC Publishing to PyPI
 

@@ -20,7 +20,6 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     permissions:
-      actions: write
       contents: write
       pull-requests: write
     outputs:
@@ -32,23 +31,8 @@ jobs:
         id: release
         if: github.event_name == 'push'
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Run CI for release PRs opened or updated with the workflow token
-        if: steps.release.outputs.prs_created == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_PRS: ${{ steps.release.outputs.prs }}
-        run: |
-          branches=$(jq -er 'map(.headBranchName) | unique | .[]' <<< "$RELEASE_PRS")
-          while IFS= read -r branch; do
-            case "$branch" in
-              release-please--*) ;;
-              *) echo "Unexpected release PR branch: $branch" >&2; exit 1 ;;
-            esac
-            gh workflow run test.yml --ref "$branch"
-          done <<< "$branches"
+          # A dedicated token lets the resulting pull_request run start without manual workflow approval.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
 
   build:
     if: |
