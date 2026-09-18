@@ -1,6 +1,6 @@
 # Smoke Tests
 
-These smoke tests verify that the core promptfoo CLI functionality works correctly through the Python wrapper.
+These smoke tests verify that the core promptfoo CLI functionality works correctly through the installed Python console script, even when an npm installation is also on `PATH`.
 
 ## What are Smoke Tests?
 
@@ -15,17 +15,20 @@ Smoke tests are high-level integration tests that verify the most critical funct
 ## Running Smoke Tests
 
 ```bash
+# Install the wrapper and its test dependencies
+uv sync --locked --extra dev
+
 # Run all smoke tests
-pytest tests/smoke/
+uv run pytest tests/smoke/
 
 # Run with verbose output
-pytest tests/smoke/ -v
+uv run pytest tests/smoke/ -v
 
 # Run a specific test class
-pytest tests/smoke/test_smoke.py::TestEvalCommand
+uv run pytest tests/smoke/test_smoke.py::TestEvalCommand
 
 # Run a specific test
-pytest tests/smoke/test_smoke.py::TestEvalCommand::test_basic_eval
+uv run pytest tests/smoke/test_smoke.py::TestEvalCommand::test_basic_eval
 ```
 
 ## Test Structure
@@ -83,6 +86,7 @@ The `echo` provider is perfect for smoke tests because:
 ## Notes
 
 - Smoke tests run slower than unit tests (they spawn subprocesses)
-- They require Node.js and promptfoo to be installed
+- They require Node.js 22.22.0 or newer and either a global promptfoo installation or network access for the first npx run
+- Settings and output use pytest temporary directories; telemetry and update checks are disabled
 - They test the integration between Python and Node.js
 - They should be kept focused on critical functionality
