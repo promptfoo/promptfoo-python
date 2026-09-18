@@ -116,9 +116,9 @@ def _get_ci_instructions(env: Environment) -> list[str]:
         lines.extend(
             [
                 "Add Node.js to your workflow:",
-                "   - uses: actions/setup-node@v4",
+                "   - uses: actions/setup-node@v7",
                 "     with:",
-                "       node-version: '20'",
+                "       node-version: '24'",
             ]
         )
     elif env.ci_platform == "gitlab":

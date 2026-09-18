@@ -151,9 +151,9 @@ promptfoo eval
 
 ```yaml
 - name: Setup Node.js
-  uses: actions/setup-node@v4
+  uses: actions/setup-node@v7
   with:
-    node-version: "20"
+    node-version: "24"
 
 - name: Install promptfoo
   run: pip install promptfoo
