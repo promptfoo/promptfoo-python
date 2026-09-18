@@ -102,7 +102,8 @@ class TestCIInstructions:
 
         instructions = get_installation_instructions(env)
 
-        assert "actions/setup-node" in instructions
+        assert "actions/setup-node@v7" in instructions
+        assert "node-version: '24'" in instructions
         assert "GITHUB" in instructions.upper()
 
     def test_gitlab_ci_instructions(self) -> None:
