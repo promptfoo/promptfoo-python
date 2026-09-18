@@ -91,20 +91,19 @@ def test_ci_container_and_wsl_hints_can_coexist() -> None:
     )
 
     assert "- uses: actions/setup-node@v7\n     with:\n       node-version: '24'" in output
-    assert "FROM node:24-bookworm-slim AS node" in output
     assert "FROM python:3.12-slim-bookworm" in output
-    assert "Keep the second FROM set to your existing image and Python environment" in output
-    assert "COPY --from=node /usr/local/bin/node /usr/bin/node" in output
-    assert "COPY --from=node /usr/local/lib/node_modules /usr/lib/node_modules" in output
-    assert "npm/bin/npm-cli.js /usr/bin/npm" in output
-    assert "npm/bin/npx-cli.js /usr/bin/npx" in output
+    assert "Keep FROM set to your existing image, platform, and Python environment" in output
+    assert "FROM node:" not in output
+    assert "https://deb.nodesource.com/setup_24.x" in output
+    assert "apt-get install -y --no-install-recommends nodejs" in output
+    assert "apt recipe supports amd64 and arm64. For other CPU architectures" in output
     assert 'ENV PATH="${PATH}:/usr/local/bin"' in output
-    assert "NPM_CONFIG_PREFIX" not in output
-    assert "Keep any existing writable npm prefix" in output
+    assert "If an inherited NPM_CONFIG_PREFIX points to an unwritable directory, change it" in output
+    assert "Keep an existing writable npm prefix only if its bin is separate from Python's scripts directory" in output
     assert "add it before /usr/bin and after your Python scripts" in output
     assert "npm config set prefix ~/.npm-global" in output
     assert "nvm install" not in output
-    assert "https://hub.docker.com/_/node" in output
+    assert "https://github.com/nodesource/distributions" in output
     assert "install Node.js inside your Linux distribution" in output
 
 
@@ -131,18 +130,19 @@ def test_non_bookworm_containers_keep_their_original_base(distribution: str, ver
         assert len(commands) == 1
         assert "apt-get update" in commands[0]
         assert "rm -rf /var/lib/apt/lists/*" in commands[0]
+        assert "apt recipe supports amd64 and arm64. For other CPU architectures" in output
 
 
-def test_trixie_container_uses_matching_supported_node_and_python_images() -> None:
+def test_trixie_container_installs_node_on_its_existing_platform() -> None:
     output = get_installation_instructions(
         Environment(os_type="linux", linux_distro="debian", linux_distro_version="13", is_docker=True)
     )
     assert "Debian Trixie" in output
-    assert "FROM node:24-trixie-slim AS node" in output
     assert "FROM python:3.12-slim-trixie" in output
-    assert "/usr/local/bin/node /usr/bin/node" in output
+    assert "FROM node:" not in output
+    assert "apt-get install -y --no-install-recommends nodejs" in output
     assert 'ENV PATH="${PATH}:/usr/local/bin"' in output
-    assert "NPM_CONFIG_PREFIX" not in output
+    assert "existing image, platform, and Python environment" in output
     assert "bookworm" not in output
 
 

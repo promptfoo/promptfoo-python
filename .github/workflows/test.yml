@@ -120,13 +120,16 @@ jobs:
               cat >> "$instruction_dir/$distro/Dockerfile" <<'EOF'
           RUN python -c "import sys, promptfoo_help_probe; assert sys.version_info[:2] == (3, 12)"
           RUN env PATH=/opt/venv/bin:/usr/bin:/bin sh -c "node --version && npm --version && npx --version"
+          RUN dpkg-query -W -f='${Version}' nodejs | grep -E '^24\.' \
+              && apt-get update && apt-get install -y --no-install-recommends nodejs \
+              && node --version | grep -E '^v24\.' && rm -rf /var/lib/apt/lists/*
           RUN mkdir -p /tmp/promptfoo-fixture /opt/venv/bin \
               && printf '%s\n' '{"name":"promptfoo","version":"1.0.0","bin":"cli.js"}' > /tmp/promptfoo-fixture/package.json \
               && printf '%s\n' '#!/usr/bin/env node' 'console.log("global-promptfoo")' > /tmp/promptfoo-fixture/cli.js \
               && chmod +x /tmp/promptfoo-fixture/cli.js \
               && printf '%s\n' '#!/bin/sh' 'echo python-promptfoo' > /usr/local/bin/promptfoo \
               && chmod +x /usr/local/bin/promptfoo && cp /usr/local/bin/promptfoo /opt/venv/bin/promptfoo \
-              && npm pack --offline --pack-destination /tmp /usr/lib/node_modules/npm
+              && npm pack --offline --ignore-scripts --pack-destination /tmp /usr/lib/node_modules/npm
           EOF
               case "$distro" in
                 bookworm-env|bookworm-npmrc)
@@ -148,6 +151,7 @@ jobs:
               && npm install --offline --no-audit --no-fund --global /tmp/promptfoo-fixture \
               && test "$(promptfoo)" = python-promptfoo && test "$("$prefix/bin/promptfoo")" = global-promptfoo \
               && npm install --offline --no-audit --no-fund --global /tmp/npm-*.tgz \
+              && hash -r \
               && test "$(readlink -f "$(command -v npm)")" = "$prefix/lib/node_modules/npm/bin/npm-cli.js" \
               && test "$(readlink -f "$(command -v npx)")" = "$prefix/lib/node_modules/npm/bin/npx-cli.js" \
               && npm --version && npx --version

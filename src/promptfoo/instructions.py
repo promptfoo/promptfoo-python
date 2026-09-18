@@ -5,6 +5,17 @@ from .node import MIN_NODE_VERSION_TEXT
 
 _NODE_DOWNLOAD = "https://nodejs.org/en/download"
 _NVM = "https://github.com/nvm-sh/nvm#installing-and-updating"
+_APT_NODE_24 = (
+    "   RUN apt-get update && apt-get install -y --no-install-recommends bash ca-certificates curl "
+    "&& curl -fsSL https://deb.nodesource.com/setup_24.x -o /tmp/nodesource-setup.sh "
+    "&& bash /tmp/nodesource-setup.sh && rm /tmp/nodesource-setup.sh "
+    "&& apt-get install -y --no-install-recommends nodejs && rm -rf /var/lib/apt/lists/*"
+)
+_NODESOURCE = "   NodeSource's apt repository: https://github.com/nodesource/distributions"
+_APT_ARCHITECTURES = (
+    "The NodeSource apt recipe supports amd64 and arm64. For other CPU architectures, select a supported "
+    f"Node.js 24 installation for your target: {_NODE_DOWNLOAD}"
+)
 _SERVERLESS = {
     "google": (
         "Google Cloud Functions / Cloud Run",
@@ -38,30 +49,27 @@ def _container_instructions(env: Environment) -> list[str]:
         return [
             f"CONTAINER: add Node.js 24 to your existing Debian {debian_release.title()} Python image; "
             "this example uses Python 3.12.",
-            "Keep the second FROM set to your existing image and Python environment:",
+            "Keep FROM set to your existing image, platform, and Python environment:",
             "Run these build steps as root; restore your original USER afterward if needed.",
-            f"   FROM node:24-{debian_release}-slim AS node",
+            _APT_ARCHITECTURES,
             f"   FROM python:3.12-slim-{debian_release}",
-            "   COPY --from=node /usr/local/bin/node /usr/bin/node",
-            "   COPY --from=node /usr/local/lib/node_modules /usr/lib/node_modules",
-            "   RUN ln -sf /usr/lib/node_modules/npm/bin/npm-cli.js /usr/bin/npm "
-            "&& ln -sf /usr/lib/node_modules/npm/bin/npx-cli.js /usr/bin/npx",
+            _APT_NODE_24,
             '   ENV PATH="${PATH}:/usr/local/bin"',
             "The default npm global prefix is /usr; the Python image installs scripts in /usr/local/bin.",
-            "Keep any existing writable npm prefix. If its bin is missing from PATH, add it before /usr/bin "
+            "Keep an existing writable npm prefix only if its bin is separate from Python's scripts directory. "
+            "If its bin is missing from PATH, add it before /usr/bin "
             "and after your Python scripts (for example /opt/venv/bin or /usr/local/bin).",
-            "A non-root user without a writable prefix can configure one with "
-            "`npm config set prefix ~/.npm-global` and add that bin directory to PATH in the same order.",
-            "   Official Node.js images: https://hub.docker.com/_/node",
+            "If an inherited NPM_CONFIG_PREFIX points to an unwritable directory, change it in the Dockerfile "
+            "(for example `ENV NPM_CONFIG_PREFIX=/home/app/.npm-global`). Without that override, a non-root user "
+            "can run `npm config set prefix ~/.npm-global`. Add the writable bin to PATH in either case.",
+            _NODESOURCE,
         ]
     if env.linux_distro == "ubuntu":
         return [
             "UBUNTU CONTAINER: keep your existing FROM and install Node.js 24 in place as root:",
-            "   RUN apt-get update && apt-get install -y --no-install-recommends bash ca-certificates curl "
-            "&& curl -fsSL https://deb.nodesource.com/setup_24.x -o /tmp/nodesource-setup.sh "
-            "&& bash /tmp/nodesource-setup.sh && rm /tmp/nodesource-setup.sh "
-            "&& apt-get install -y --no-install-recommends nodejs && rm -rf /var/lib/apt/lists/*",
-            "   NodeSource's apt repository: https://github.com/nodesource/distributions",
+            _APT_ARCHITECTURES,
+            _APT_NODE_24,
+            _NODESOURCE,
         ]
     if env.linux_distro == "amzn" and env.linux_distro_version == "2023":
         return [
