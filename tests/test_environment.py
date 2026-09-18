@@ -1,530 +1,119 @@
-"""
-Tests for environment detection.
-
-This module tests detection of operating systems, Linux distributions,
-cloud providers, containers, CI/CD platforms, and Python environments.
-"""
-
-import os
 from pathlib import Path
-from unittest import mock
+from unittest.mock import MagicMock
 
 import pytest
 
-from promptfoo.environment import (
-    _detect_ci,
-    _detect_cloud_provider,
-    _detect_container,
-    _detect_linux_distro,
-    _detect_python_env,
-    _detect_wsl,
-    _has_sudo_access,
-    _read_probe_file,
-    detect_environment,
+from promptfoo import environment
+
+
+@pytest.fixture(autouse=True)
+def isolated_probes(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in (
+        "GITHUB_ACTIONS",
+        "GITLAB_CI",
+        "CIRCLECI",
+        "JENKINS_URL",
+        "BUILDKITE",
+        "TF_BUILD",
+        "CI",
+        "AWS_LAMBDA_FUNCTION_NAME",
+        "FUNCTIONS_WORKER_RUNTIME",
+        "FUNCTION_TARGET",
+        "FUNCTION_NAME",
+        "WSL_DISTRO_NAME",
+        "WSL_INTEROP",
+        "KUBERNETES_SERVICE_HOST",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(environment, "_read_probe", lambda path: "")
+    monkeypatch.setattr(Path, "is_file", lambda path: False)
+
+
+@pytest.mark.parametrize(
+    "release, expected",
+    [
+        ({"ID": "alpine", "VERSION_ID": "3.24"}, ("alpine", "3.24")),
+        ({"ID": "derivative", "ID_LIKE": "alpine", "VERSION_ID": "1"}, ("alpine", "1")),
+        ({"ID": "amzn", "ID_LIKE": "fedora", "VERSION_ID": "2023"}, ("amzn", "2023")),
+        ({"ID": "amzn", "VERSION_ID": "2"}, ("amzn", "2")),
+        ({"ID": "ubuntu", "VERSION_ID": "24.04"}, ("ubuntu", "24.04")),
+        ({"ID": "unknown"}, ("unknown", None)),
+        ({}, (None, None)),
+    ],
 )
+def test_reads_the_standard_linux_release(
+    monkeypatch: pytest.MonkeyPatch, release: dict[str, str], expected: tuple[str | None, str | None]
+) -> None:
+    monkeypatch.setattr(environment.platform, "freedesktop_os_release", lambda: release)
+    assert environment._linux_release() == expected
 
 
-class TestProbeFileReads:
-    """Test best-effort probe file reads."""
-
-    def test_read_probe_file_returns_none_when_missing(self, tmp_path: Path) -> None:
-        """Missing probe files return None."""
-        assert _read_probe_file(tmp_path / "missing") is None
-
-    def test_read_probe_file_returns_content_when_readable(self, tmp_path: Path) -> None:
-        """Readable probe files return their text content."""
-        probe_file = tmp_path / "probe"
-        probe_file.write_text("value")
-
-        assert _read_probe_file(probe_file) == "value"
-
-    def test_read_probe_file_returns_none_when_unreadable(self, tmp_path: Path) -> None:
-        """Unreadable probe files return None instead of raising."""
-        probe_file = tmp_path / "probe"
-        probe_file.write_text("value")
-
-        with mock.patch("builtins.open", side_effect=OSError("permission denied")):
-            assert _read_probe_file(probe_file) is None
+def test_missing_linux_release_does_not_prevent_generic_help(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(environment.platform, "freedesktop_os_release", MagicMock(side_effect=OSError))
+    assert environment._linux_release() == (None, None)
 
 
-class TestLinuxDistroDetection:
-    """Test Linux distribution detection."""
-
-    def test_detect_linux_distro_returns_tuple(self) -> None:
-        """Linux distro detection returns a tuple."""
-        distro, version = _detect_linux_distro()
-        # Should return tuple even if both None
-        assert isinstance(distro, (str, type(None)))
-        assert isinstance(version, (str, type(None)))
-
-    def test_detect_derivative_distro_pop_os(self, tmp_path: Path) -> None:
-        """Detect Pop!_OS as Ubuntu derivative via ID_LIKE."""
-        os_release = tmp_path / "os-release"
-        os_release.write_text('ID=pop\nVERSION_ID="22.04"\nID_LIKE="ubuntu debian"')
-
-        missing_path = mock.Mock()
-        missing_path.exists.return_value = False
-
-        with mock.patch("promptfoo.environment.Path") as mock_path_class:
-
-            def path_side_effect(path_str: str) -> object:
-                if path_str == "/etc/os-release":
-                    return os_release
-                return missing_path
-
-            mock_path_class.side_effect = path_side_effect
-
-            distro, version = _detect_linux_distro()
-            assert distro == "ubuntu"  # Should resolve to parent via ID_LIKE
-            assert version == "22.04"
-
-    def test_detect_derivative_distro_raspbian(self, tmp_path: Path) -> None:
-        """Detect Raspbian as Debian derivative via ID_LIKE."""
-        os_release_data = 'ID=raspbian\nVERSION_ID="11"\nID_LIKE=debian'
-
-        with (
-            mock.patch("builtins.open", mock.mock_open(read_data=os_release_data)),
-            mock.patch("promptfoo.environment.Path") as mock_path_class,
-        ):
-            mock_path_obj = mock.Mock()
-            mock_path_obj.exists.return_value = True
-            mock_path_class.return_value = mock_path_obj
-
-            distro, version = _detect_linux_distro()
-            assert distro == "debian"  # Should resolve to parent via ID_LIKE
-            assert version == "11"
-
-    def test_detect_derivative_distro_linux_mint(self, tmp_path: Path) -> None:
-        """Detect Linux Mint as Ubuntu derivative via ID_LIKE."""
-        os_release_data = 'ID=linuxmint\nVERSION_ID="21"\nID_LIKE="ubuntu debian"'
-
-        with (
-            mock.patch("builtins.open", mock.mock_open(read_data=os_release_data)),
-            mock.patch("promptfoo.environment.Path") as mock_path_class,
-        ):
-            mock_path_obj = mock.Mock()
-            mock_path_obj.exists.return_value = True
-            mock_path_class.return_value = mock_path_obj
-
-            distro, version = _detect_linux_distro()
-            assert distro == "ubuntu"  # Should resolve to first known parent in ID_LIKE
-            assert version == "21"
-
-    def test_usr_lib_os_release_fallback(self, tmp_path: Path) -> None:
-        """Detect distro from /usr/lib/os-release if /etc/os-release missing."""
-        with mock.patch("promptfoo.environment.Path") as mock_path_class:
-            # Create mock Path objects
-            etc_path = mock.Mock()
-            etc_path.exists.return_value = False
-            etc_path.__str__ = lambda self: "/etc/os-release"
-
-            usr_path = mock.Mock()
-            usr_path.exists.return_value = True
-            usr_path.__str__ = lambda self: "/usr/lib/os-release"
-
-            def path_constructor(path_str: str) -> mock.Mock:
-                if path_str == "/etc/os-release":
-                    return etc_path
-                elif path_str == "/usr/lib/os-release":
-                    return usr_path
-                return mock.Mock()
-
-            mock_path_class.side_effect = path_constructor
-
-            with mock.patch("builtins.open", mock.mock_open(read_data='ID=ubuntu\nVERSION_ID="22.04"')):
-                distro, version = _detect_linux_distro()
-                assert distro == "ubuntu"
-                assert version == "22.04"
-
-    def test_detect_linux_distro_skips_unreadable_os_release(self) -> None:
-        """Unreadable /etc/os-release falls back to /usr/lib/os-release."""
-        etc_path = mock.Mock()
-        etc_path.exists.return_value = True
-
-        usr_path = mock.Mock()
-        usr_path.exists.return_value = True
-
-        def path_constructor(path_str: str) -> mock.Mock:
-            if path_str == "/etc/os-release":
-                return etc_path
-            elif path_str == "/usr/lib/os-release":
-                return usr_path
-            fallback_path = mock.Mock()
-            fallback_path.exists.return_value = False
-            return fallback_path
-
-        usr_open = mock.mock_open(read_data='ID=ubuntu\nVERSION_ID="22.04"')
-
-        def open_side_effect(path: mock.Mock) -> mock.MagicMock:
-            if path is etc_path:
-                raise OSError("permission denied")
-            if path is usr_path:
-                return usr_open()
-            raise AssertionError(f"unexpected probe path: {path!r}")
-
-        with (
-            mock.patch("promptfoo.environment.Path", side_effect=path_constructor),
-            mock.patch("builtins.open", side_effect=open_side_effect),
-        ):
-            distro, version = _detect_linux_distro()
-            assert distro == "ubuntu"
-            assert version == "22.04"
+@pytest.mark.parametrize("platform, expected", [("win32", "windows"), ("darwin", "darwin"), ("freebsd14", "freebsd14")])
+def test_non_linux_platforms_do_not_probe_linux_files(
+    monkeypatch: pytest.MonkeyPatch, platform: str, expected: str
+) -> None:
+    monkeypatch.setattr(environment.sys, "platform", platform)
+    probe = MagicMock(side_effect=AssertionError("Linux probe ran on another OS"))
+    monkeypatch.setattr(environment, "_linux_release", probe)
+    monkeypatch.setattr(environment, "_in_container", probe)
+    monkeypatch.setattr(environment, "_read_probe", probe)
+    assert environment.detect_environment() == environment.Environment(os_type=expected)
 
 
-class TestCloudProviderDetection:
-    """Test cloud provider detection."""
+def test_kubernetes_is_used_to_show_container_help(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(environment.sys, "platform", "linux")
+    monkeypatch.setattr(environment.platform, "freedesktop_os_release", lambda: {"ID": "alpine"})
+    monkeypatch.setattr(environment, "_read_probe", lambda path: "0::/" if path == "/proc/1/cgroup" else "")
+    monkeypatch.setenv("KUBERNETES_SERVICE_HOST", "10.0.0.1")
 
-    def test_detect_aws_from_hypervisor_uuid(self, tmp_path: Path) -> None:
-        """Detect AWS from hypervisor UUID."""
-        uuid_file = tmp_path / "uuid"
-        uuid_file.write_text("ec2e1916-9099-7caf-fd21-012345abcdef\n")
+    result = environment.detect_environment()
 
-        with mock.patch("promptfoo.environment.Path") as mock_path:
-            mock_path_instance = mock_path.return_value
-            mock_path_instance.exists.return_value = True
-            mock_path_instance.__truediv__.return_value = uuid_file
-
-            with mock.patch("builtins.open", mock.mock_open(read_data="ec2e1916-9099-7caf-fd21-012345abcdef\n")):
-                provider = _detect_cloud_provider()
-                assert provider == "aws"
-
-    def test_detect_aws_from_env_vars(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Detect AWS from environment variables."""
-        monkeypatch.setenv("AWS_EXECUTION_ENV", "AWS_Lambda_python3.11")
-
-        with mock.patch("promptfoo.environment.Path") as mock_path:
-            mock_path.return_value.exists.return_value = False
-
-            provider = _detect_cloud_provider()
-            assert provider == "aws"
-
-    def test_detect_gcp_from_env_vars(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Detect GCP from environment variables."""
-        monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "my-project")
-
-        with mock.patch("promptfoo.environment.Path") as mock_path:
-            mock_path.return_value.exists.return_value = False
-
-            provider = _detect_cloud_provider()
-            assert provider == "gcp"
-
-    def test_detect_azure_from_env_vars(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Detect Azure from environment variables."""
-        monkeypatch.setenv("AZURE_SUBSCRIPTION_ID", "12345")
-
-        with mock.patch("promptfoo.environment.Path") as mock_path:
-            mock_path.return_value.exists.return_value = False
-
-            provider = _detect_cloud_provider()
-            assert provider == "azure"
-
-    def test_no_cloud_provider_detected(self) -> None:
-        """Return None when no cloud provider is detected."""
-        with mock.patch("promptfoo.environment.Path") as mock_path:
-            mock_path.return_value.exists.return_value = False
-            with mock.patch.dict(os.environ, {}, clear=True):
-                provider = _detect_cloud_provider()
-                assert provider is None
-
-    def test_detect_cloud_provider_ignores_unreadable_probe_files(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Unreadable cloud metadata files fall back to environment variables."""
-        monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "my-project")
-
-        path_mock = mock.Mock()
-        path_mock.exists.return_value = True
-
-        with (
-            mock.patch("promptfoo.environment.Path", return_value=path_mock),
-            mock.patch("builtins.open", side_effect=OSError("permission denied")),
-        ):
-            provider = _detect_cloud_provider()
-            assert provider == "gcp"
+    assert result.is_docker
+    assert result.linux_distro == "alpine"
 
 
-class TestContainerDetection:
-    """Test container detection."""
-
-    def test_detect_kubernetes_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Detect Kubernetes from environment variable."""
-        monkeypatch.setenv("KUBERNETES_SERVICE_HOST", "10.96.0.1")
-
-        with mock.patch("promptfoo.environment.Path") as mock_path:
-            mock_path.return_value.exists.return_value = False
-
-            is_docker, is_k8s = _detect_container()
-            assert is_docker is False
-            assert is_k8s is True
-
-    def test_detect_container_returns_tuple(self) -> None:
-        """Container detection returns a tuple of booleans."""
-        is_docker, is_k8s = _detect_container()
-        assert isinstance(is_docker, bool)
-        assert isinstance(is_k8s, bool)
-
-    def test_detect_container_ignores_unreadable_cgroup(self) -> None:
-        """Unreadable cgroup metadata does not raise."""
-
-        def path_constructor(path_str: str) -> mock.Mock:
-            path_mock = mock.Mock()
-            path_mock.exists.return_value = path_str == "/proc/1/cgroup"
-            return path_mock
-
-        with (
-            mock.patch("promptfoo.environment.Path", side_effect=path_constructor),
-            mock.patch("builtins.open", side_effect=OSError("permission denied")),
-            mock.patch.dict(os.environ, {}, clear=True),
-        ):
-            is_docker, is_k8s = _detect_container()
-            assert is_docker is False
-            assert is_k8s is False
+@pytest.mark.parametrize("runtime", ["docker", "containerd", "kubepods", "crio"])
+def test_container_runtime_can_also_be_detected_from_cgroups(monkeypatch: pytest.MonkeyPatch, runtime: str) -> None:
+    monkeypatch.setattr(environment, "_read_probe", lambda path: f"0::/{runtime}/container")
+    assert environment._in_container()
 
 
-class TestWSLDetection:
-    """Test WSL detection."""
+def test_docker_marker_works_without_cgroup_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(Path, "is_file", lambda path: str(path).replace("\\", "/").endswith("/.dockerenv"))
+    assert environment._in_container()
 
-    def test_detect_wsl_from_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Detect WSL from WSL_DISTRO_NAME environment variable."""
+
+@pytest.mark.parametrize("use_environment", [True, False])
+def test_detects_wsl_only_on_linux(monkeypatch: pytest.MonkeyPatch, use_environment: bool) -> None:
+    monkeypatch.setattr(environment.sys, "platform", "linux")
+    monkeypatch.setattr(environment.platform, "freedesktop_os_release", lambda: {"ID": "ubuntu"})
+    if use_environment:
         monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu")
-
-        assert _detect_wsl() is True
-
-    def test_detect_wsl_from_interop_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Detect WSL from WSL_INTEROP environment variable."""
-        monkeypatch.setenv("WSL_INTEROP", "/run/WSL/123_interop")
-
-        assert _detect_wsl() is True
-
-    def test_no_wsl_detected(self) -> None:
-        """Return False when not in WSL."""
-        with mock.patch.dict(os.environ, {}, clear=True):
-            # This will return False unless we're actually in WSL
-            # Just verify it returns a boolean
-            result = _detect_wsl()
-            assert isinstance(result, bool)
-
-    def test_detect_wsl_ignores_unreadable_proc_version(self) -> None:
-        """Unreadable /proc/version does not raise."""
-
-        def path_constructor(path_str: str) -> mock.Mock:
-            path_mock = mock.Mock()
-            path_mock.exists.return_value = path_str == "/proc/version"
-            return path_mock
-
-        with (
-            mock.patch("promptfoo.environment.Path", side_effect=path_constructor),
-            mock.patch("builtins.open", side_effect=OSError("permission denied")),
-            mock.patch.dict(os.environ, {}, clear=True),
-        ):
-            assert _detect_wsl() is False
+    else:
+        monkeypatch.setattr(environment, "_read_probe", lambda path: "6.6-Microsoft-standard-WSL2")
+    assert environment.detect_environment().is_wsl
 
 
-class TestCIDetection:
-    """Test CI/CD platform detection."""
-
-    @pytest.mark.parametrize(
-        "env_var,expected_platform",
-        [
-            ("GITHUB_ACTIONS", "github"),
-            ("GITLAB_CI", "gitlab"),
-            ("CIRCLECI", "circleci"),
-            ("JENKINS_HOME", "jenkins"),
-            ("TRAVIS", "travis"),
-            ("BUILDKITE", "buildkite"),
-        ],
-    )
-    def test_detect_specific_ci_platforms(
-        self, env_var: str, expected_platform: str, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Detect specific CI/CD platforms from environment variables."""
-        with mock.patch.dict(os.environ, {}, clear=True):
-            monkeypatch.setenv(env_var, "true")
-            is_ci, platform = _detect_ci()
-            assert is_ci is True
-            assert platform == expected_platform
-
-    def test_detect_generic_ci(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Detect generic CI from CI environment variable."""
-        with mock.patch.dict(os.environ, {}, clear=True):
-            monkeypatch.setenv("CI", "true")
-            is_ci, platform = _detect_ci()
-            assert is_ci is True
-            assert platform is None
-
-    def test_no_ci_detected(self) -> None:
-        """Return False when no CI is detected."""
-        with mock.patch.dict(os.environ, {}, clear=True):
-            is_ci, platform = _detect_ci()
-            assert is_ci is False
-            assert platform is None
+@pytest.mark.parametrize(
+    "variable, expected",
+    [("GITHUB_ACTIONS", "GitHub Actions"), ("GITLAB_CI", "GitLab CI"), ("CIRCLECI", "CircleCI"), ("CI", "CI")],
+)
+def test_detects_ci_guidance(monkeypatch: pytest.MonkeyPatch, variable: str, expected: str) -> None:
+    monkeypatch.setenv(variable, "1")
+    assert environment._ci_platform() == expected
 
 
-class TestPythonEnvDetection:
-    """Test Python environment detection."""
-
-    def test_detect_venv(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Detect virtualenv from sys.prefix."""
-        import sys
-
-        with mock.patch.object(sys, "prefix", "/home/user/venv"), mock.patch.object(sys, "base_prefix", "/usr"):
-            is_venv, is_conda = _detect_python_env()
-            assert is_venv is True
-
-    def test_detect_conda(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Detect conda from environment variable."""
-        monkeypatch.setenv("CONDA_DEFAULT_ENV", "base")
-        is_venv, is_conda = _detect_python_env()
-        assert is_conda is True
-
-    def test_no_venv_detected(self) -> None:
-        """Return False when no venv is detected."""
-        import sys
-
-        with (
-            mock.patch.object(sys, "prefix", "/usr"),
-            mock.patch.object(sys, "base_prefix", "/usr"),
-            mock.patch.dict(os.environ, {}, clear=True),
-        ):
-            is_venv, is_conda = _detect_python_env()
-            assert is_venv is False
-            assert is_conda is False
-
-
-class TestSudoAccess:
-    """Test sudo access detection."""
-
-    def test_has_sudo_when_root(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Detect sudo access when running as root."""
-        if hasattr(os, "geteuid"):
-            with mock.patch("os.geteuid", return_value=0):
-                assert _has_sudo_access() is True
-
-    def test_has_sudo_when_sudo_command_exists(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Detect sudo access when sudo command exists."""
-        if hasattr(os, "geteuid"):
-            with (
-                mock.patch("os.geteuid", return_value=1000),
-                mock.patch("shutil.which", return_value="/usr/bin/sudo"),
-            ):
-                assert _has_sudo_access() is True
-
-    def test_no_sudo_when_command_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Return False when sudo command doesn't exist."""
-        if hasattr(os, "geteuid"):
-            with mock.patch("os.geteuid", return_value=1000), mock.patch("shutil.which", return_value=None):
-                assert _has_sudo_access() is False
-
-
-class TestDetectEnvironment:
-    """Test complete environment detection."""
-
-    def test_detect_ubuntu_with_docker(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-        """Detect Ubuntu in Docker container."""
-        os_release = tmp_path / "os-release"
-        os_release.write_text('ID=ubuntu\nVERSION_ID="22.04"')
-
-        with (
-            mock.patch("sys.platform", "linux"),
-            mock.patch("promptfoo.environment._detect_linux_distro", return_value=("ubuntu", "22.04")),
-            mock.patch("promptfoo.environment._detect_container", return_value=(True, False)),
-            mock.patch("promptfoo.environment._detect_wsl", return_value=False),
-            mock.patch("promptfoo.environment._detect_ci", return_value=(False, None)),
-            mock.patch("promptfoo.environment._detect_cloud_provider", return_value=None),
-            mock.patch("promptfoo.environment._detect_python_env", return_value=(True, False)),
-            mock.patch("promptfoo.environment._has_sudo_access", return_value=False),
-        ):
-            env = detect_environment()
-
-            assert env.os_type == "linux"
-            assert env.linux_distro == "ubuntu"
-            assert env.linux_distro_version == "22.04"
-            assert env.is_docker is True
-            assert env.is_kubernetes is False
-            assert env.is_wsl is False
-            assert env.is_venv is True
-
-    def test_detect_macos_environment(self) -> None:
-        """Detect macOS environment."""
-        with (
-            mock.patch("sys.platform", "darwin"),
-            mock.patch("promptfoo.environment._detect_ci", return_value=(False, None)),
-            mock.patch("promptfoo.environment._detect_cloud_provider", return_value=None),
-            mock.patch("promptfoo.environment._detect_python_env", return_value=(False, False)),
-            mock.patch("promptfoo.environment._has_sudo_access", return_value=True),
-        ):
-            env = detect_environment()
-
-            assert env.os_type == "darwin"
-            assert env.linux_distro is None
-            assert env.has_sudo is True
-
-    def test_detect_windows_environment(self) -> None:
-        """Detect Windows environment."""
-        with (
-            mock.patch("sys.platform", "win32"),
-            mock.patch("promptfoo.environment._detect_ci", return_value=(False, None)),
-            mock.patch("promptfoo.environment._detect_cloud_provider", return_value=None),
-            mock.patch("promptfoo.environment._detect_python_env", return_value=(False, False)),
-            mock.patch("promptfoo.environment._has_sudo_access", return_value=False),
-        ):
-            env = detect_environment()
-
-            assert env.os_type == "windows"
-
-    def test_detect_aws_lambda(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Detect AWS Lambda environment."""
-        monkeypatch.setenv("AWS_LAMBDA_FUNCTION_NAME", "my-function")
-
-        with (
-            mock.patch("sys.platform", "linux"),
-            mock.patch("promptfoo.environment._detect_linux_distro", return_value=("amzn", "2")),
-            mock.patch("promptfoo.environment._detect_container", return_value=(False, False)),
-            mock.patch("promptfoo.environment._detect_wsl", return_value=False),
-            mock.patch("promptfoo.environment._detect_ci", return_value=(False, None)),
-            mock.patch("promptfoo.environment._detect_cloud_provider", return_value="aws"),
-            mock.patch("promptfoo.environment._detect_python_env", return_value=(False, False)),
-            mock.patch("promptfoo.environment._has_sudo_access", return_value=False),
-        ):
-            env = detect_environment()
-
-            assert env.is_lambda is True
-            assert env.cloud_provider == "aws"
-
-    def test_detect_github_actions(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Detect GitHub Actions environment."""
-        monkeypatch.setenv("GITHUB_ACTIONS", "true")
-
-        with (
-            mock.patch("sys.platform", "linux"),
-            mock.patch("promptfoo.environment._detect_linux_distro", return_value=("ubuntu", "22.04")),
-            mock.patch("promptfoo.environment._detect_container", return_value=(False, False)),
-            mock.patch("promptfoo.environment._detect_wsl", return_value=False),
-            mock.patch("promptfoo.environment._detect_ci", return_value=(True, "github")),
-            mock.patch("promptfoo.environment._detect_cloud_provider", return_value=None),
-            mock.patch("promptfoo.environment._detect_python_env", return_value=(False, False)),
-            mock.patch("promptfoo.environment._has_sudo_access", return_value=True),
-        ):
-            env = detect_environment()
-
-            assert env.is_ci is True
-            assert env.ci_platform == "github"
-
-    def test_detect_wsl_ubuntu(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Detect WSL with Ubuntu."""
-        monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu")
-
-        with (
-            mock.patch("sys.platform", "linux"),
-            mock.patch("promptfoo.environment._detect_linux_distro", return_value=("ubuntu", "22.04")),
-            mock.patch("promptfoo.environment._detect_container", return_value=(False, False)),
-            mock.patch("promptfoo.environment._detect_wsl", return_value=True),
-            mock.patch("promptfoo.environment._detect_ci", return_value=(False, None)),
-            mock.patch("promptfoo.environment._detect_cloud_provider", return_value=None),
-            mock.patch("promptfoo.environment._detect_python_env", return_value=(False, False)),
-            mock.patch("promptfoo.environment._has_sudo_access", return_value=True),
-        ):
-            env = detect_environment()
-
-            assert env.os_type == "linux"
-            assert env.linux_distro == "ubuntu"
-            assert env.is_wsl is True
-            assert env.is_docker is False
+@pytest.mark.parametrize(
+    "variable, expected",
+    [("AWS_LAMBDA_FUNCTION_NAME", "aws"), ("FUNCTIONS_WORKER_RUNTIME", "azure"), ("FUNCTION_TARGET", "google")],
+)
+def test_detects_serverless_from_provider_supplied_variables(
+    monkeypatch: pytest.MonkeyPatch, variable: str, expected: str
+) -> None:
+    monkeypatch.setenv(variable, "configured")
+    assert environment._serverless() == expected

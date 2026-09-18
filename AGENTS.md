@@ -508,12 +508,8 @@ git push --force
 
 ### Q: The release-please PR shows the wrong version. How do I fix it?
 
-**A**: The version bump is determined by commit messages:
-- Check all commits since the last release
-- Ensure they follow conventional commits
-- `fix:` commits bump minor version (pre-1.0.0)
-- `feat:` commits bump minor version (pre-1.0.0)
-- If the version is still wrong, you may need to manually adjust `.release-please-manifest.json` in a new PR
+**A**: Check the commits since the last release against [Version Bumping Strategy](#version-bumping-strategy).
+That section is the source of truth for the pre-1.0 rules and links to the release-please configuration.
 
 ### Q: How do I manually publish to PyPI?
 
