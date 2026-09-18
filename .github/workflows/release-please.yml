@@ -36,7 +36,8 @@ jobs:
         id: release
         if: github.event_name == 'push'
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # A dedicated token lets the resulting pull_request run start without manual workflow approval.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
 
   build:
     if: |
@@ -47,25 +48,50 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Check out publishing tool requirements from the workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: .github/requirements-twine.txt
+          sparse-checkout-cone-mode: false
+
+      - name: Save publishing tool requirements for historical tags
+        run: cp .github/requirements-twine.txt "$RUNNER_TEMP/requirements-twine.txt"
+
+      - name: Check out the release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
+          persist-credentials: false
 
-      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
-          enable-cache: true
+          version: "0.12.17"
+          enable-cache: auto
 
       - name: Pin Python version
         run: uv python pin 3.12
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        env:
+          REPUBLISH_TAG: ${{ inputs.tag }}
+        run: |
+          if [[ -n "$REPUBLISH_TAG" ]]; then
+            # Historical tags predate keeping the package version in uv.lock in sync.
+            uv sync --extra dev
+          else
+            uv sync --locked --extra dev
+          fi
 
       - name: Run unit tests
         run: uv run pytest -m 'not smoke' -q
 
       - name: Build package
         run: uv build
+
+      - name: Check distribution metadata with Twine
+        run: uvx --from twine --constraints "$RUNNER_TEMP/requirements-twine.txt" twine check --strict dist/*
 
       - name: Verify package version matches release tag
         env:
@@ -87,6 +113,7 @@ jobs:
         with:
           name: dist
           path: dist/
+          if-no-files-found: error
 
   publish-pypi:
     if: |
@@ -108,7 +135,7 @@ jobs:
           path: dist/
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
           print-hash: true
 

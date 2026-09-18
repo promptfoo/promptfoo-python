@@ -5,8 +5,40 @@ This module tests that appropriate instructions are generated for
 different platforms and environments.
 """
 
+import pytest
+
 from promptfoo.environment import Environment
 from promptfoo.instructions import get_installation_instructions
+
+
+@pytest.mark.parametrize(
+    ("env", "recommended"),
+    [
+        (Environment(os_type="linux", is_lambda=True), "node --version"),
+        (Environment(os_type="linux", is_cloud_function=True, cloud_provider="gcp"), "node --version"),
+        (Environment(os_type="linux", is_ci=True, ci_platform="github"), "node-version: '24'"),
+        (Environment(os_type="linux", is_ci=True, ci_platform="gitlab"), "image: node:24"),
+        (Environment(os_type="linux", is_ci=True, ci_platform="circleci"), "node-version: '24'"),
+        (Environment(os_type="linux", linux_distro="alpine"), "apk add --no-cache 'nodejs~24' npm"),
+        (Environment(os_type="linux", linux_distro="alpine", is_docker=True), "FROM node:24-alpine"),
+        (Environment(os_type="linux", linux_distro="ubuntu", is_docker=True), "setup_24.x"),
+        (Environment(os_type="linux", is_docker=True), "FROM node:24-bookworm-slim"),
+        (Environment(os_type="linux", is_wsl=True), "nvm install 24"),
+        (Environment(os_type="linux", linux_distro="rhel", has_sudo=True), "setup_24.x"),
+        (Environment(os_type="darwin"), "nvm install 24"),
+        (Environment(os_type="windows"), "OpenJS.NodeJS.LTS"),
+    ],
+)
+def test_installation_help_requires_supported_node(env: Environment, recommended: str) -> None:
+    """Every platform states the exact minimum and versioned examples install a supported runtime."""
+    instructions = get_installation_instructions(env)
+
+    assert "requires Node.js 22.22.0 or newer" in instructions
+    assert recommended in instructions
+    assert "nvm install 20" not in instructions
+    assert "setup_20.x" not in instructions
+    assert "node-version: '20'" not in instructions
+    assert "image: node:20" not in instructions
 
 
 class TestLambdaInstructions:
@@ -70,7 +102,8 @@ class TestCIInstructions:
 
         instructions = get_installation_instructions(env)
 
-        assert "actions/setup-node" in instructions
+        assert "actions/setup-node@v7" in instructions
+        assert "node-version: '24'" in instructions
         assert "GITHUB" in instructions.upper()
 
     def test_gitlab_ci_instructions(self) -> None:
@@ -112,7 +145,10 @@ class TestDockerInstructions:
 
         instructions = get_installation_instructions(env)
 
-        assert "apk add" in instructions
+        assert "FROM node:24-alpine" in instructions
+        assert "RUN apk add --no-cache python3 py3-pip" in instructions
+        assert "python3 -m venv /opt/venv" in instructions
+        assert "apk add --no-cache nodejs npm" not in instructions
         assert "Dockerfile" in instructions
 
     def test_docker_ubuntu_instructions(self) -> None:
@@ -241,12 +277,17 @@ class TestLinuxInstructions:
         env = Environment(
             os_type="linux",
             linux_distro="alpine",
+            linux_distro_version="3.20",
         )
 
         instructions = get_installation_instructions(env)
 
         assert "ALPINE" in instructions
-        assert "apk add" in instructions
+        assert "apk add --no-cache 'nodejs~24' npm" in instructions
+        assert "upgrade Alpine or use the official node:24-alpine container" in instructions
+        assert "node --version" in instructions
+        assert "apk add --update nodejs npm" not in instructions
+        assert "apk add --no-cache nodejs npm" not in instructions
 
     def test_arch_instructions(self) -> None:
         """Generate Arch Linux instructions."""
