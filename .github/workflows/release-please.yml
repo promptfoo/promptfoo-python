@@ -9,6 +9,10 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    paths:
+      - ".github/workflows/release-please.yml"
+      - "release-please-config.json"
   workflow_dispatch:
     inputs:
       tag:
@@ -18,6 +22,7 @@ on:
 
 jobs:
   release-please:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -27,7 +32,7 @@ jobs:
       tag_name: ${{ inputs.tag || steps.release.outputs.tag_name }}
     steps:
       # Only run the bot on push events; skip it for manual re-publish triggers.
-      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
         id: release
         if: github.event_name == 'push'
         with:
@@ -133,3 +138,17 @@ jobs:
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
           print-hash: true
+
+  validate-action:
+    name: Validate release-please action (read-only)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Start the same release action without creating releases or pull requests
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
+        with:
+          skip-github-release: true
+          skip-github-pull-request: true
