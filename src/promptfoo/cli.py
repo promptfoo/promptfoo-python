@@ -11,6 +11,7 @@ import subprocess
 import sys
 from typing import NoReturn
 
+from .node import MIN_NODE_VERSION, MIN_NODE_VERSION_TEXT, get_node_version
 from .telemetry import record_wrapper_used
 
 _WRAPPER_ENV = "PROMPTFOO_PY_WRAPPER"
@@ -193,9 +194,27 @@ def main() -> NoReturn:
     Executes promptfoo using subprocess.run() with minimal configuration.
     """
     try:
-        # Check for Node.js installation
-        if not check_node_installed():
+        node_path = shutil.which("node")
+        if not node_path:
             print_installation_help()
+            sys.exit(1)
+
+        node_version = get_node_version(node_path)
+        if node_version is None:
+            print(
+                f"ERROR: Could not determine the Node.js version. promptfoo requires Node.js {MIN_NODE_VERSION_TEXT} "
+                "or newer. Check that node --version reports a stable version.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        if node_version < MIN_NODE_VERSION:
+            found_version = ".".join(map(str, node_version))
+            print(
+                f"ERROR: promptfoo requires Node.js {MIN_NODE_VERSION_TEXT} or newer (found v{found_version}). "
+                "Please upgrade Node.js: https://nodejs.org/",
+                file=sys.stderr,
+            )
             sys.exit(1)
 
         # Build command: try external promptfoo first, fall back to npx
