@@ -159,6 +159,8 @@ Triggered on push to main:
 The required Python CI check must come from a `pull_request` run. If `RELEASE_PLEASE_TOKEN`
 is configured with access to create and update release PRs, GitHub starts those runs automatically.
 With the default workflow token, a maintainer must use **Approve workflows to run** on the release PR.
+GitHub documents this for the `opened`, `synchronize`, and `reopened` pull request events in
+[Events that trigger workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request).
 Manually dispatching the Python CI workflow can help diagnose problems, but its checks do not satisfy branch protection.
 
 ### OIDC Publishing to PyPI
