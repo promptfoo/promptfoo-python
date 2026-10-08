@@ -129,6 +129,7 @@ jobs:
               && chmod +x /tmp/promptfoo-fixture/cli.js \
               && printf '%s\n' '#!/bin/sh' 'echo python-promptfoo' > /usr/local/bin/promptfoo \
               && chmod +x /usr/local/bin/promptfoo && cp /usr/local/bin/promptfoo /opt/venv/bin/promptfoo \
+              && npm pack --offline --ignore-scripts --pack-destination /tmp /tmp/promptfoo-fixture \
               && npm pack --offline --ignore-scripts --pack-destination /tmp /usr/lib/node_modules/npm
           EOF
               case "$distro" in
@@ -148,7 +149,7 @@ jobs:
               cat >> "$instruction_dir/$distro/Dockerfile" <<'EOF'
           RUN prefix="$(npm prefix --global)" \
               && python -c "import sysconfig; assert sysconfig.get_path('scripts') != '$prefix/bin'" \
-              && npm install --offline --no-audit --no-fund --global /tmp/promptfoo-fixture \
+              && npm install --offline --no-audit --no-fund --global /tmp/promptfoo-1.0.0.tgz \
               && test "$(promptfoo)" = python-promptfoo && test "$("$prefix/bin/promptfoo")" = global-promptfoo \
               && npm install --offline --no-audit --no-fund --global /tmp/npm-*.tgz \
               && hash -r \

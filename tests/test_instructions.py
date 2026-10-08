@@ -17,7 +17,9 @@ def test_every_platform_gets_the_runtime_requirement_and_a_working_fallback(plat
     if platform == "windows":
         assert "use: npx.exe --version" in output
     assert "node --version &&" not in output
-    assert "DIRECT USAGE after installing Node.js: npx promptfoo@latest eval" in output
+    assert f"DIRECT USAGE after installing Node.js: {npx} promptfoo@latest eval" in output
+    if platform == "windows":
+        assert "use: npx.exe promptfoo@latest eval" in output
 
 
 @pytest.mark.parametrize(

@@ -185,5 +185,8 @@ def get_installation_instructions(env: Environment) -> str:
     elif env.os_type == "windows":
         lines += ["", "WINDOWS: use the installer linked above or run: winget install OpenJS.NodeJS.LTS"]
 
-    lines += ["", "DIRECT USAGE after installing Node.js: npx promptfoo@latest eval"]
+    npx = "npx.cmd" if env.os_type == "windows" else "npx"
+    lines += ["", f"DIRECT USAGE after installing Node.js: {npx} promptfoo@latest eval"]
+    if env.os_type == "windows":
+        lines.append("If your Node manager provides npx.exe instead, use: npx.exe promptfoo@latest eval")
     return "\n".join(lines)
