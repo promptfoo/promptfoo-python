@@ -78,7 +78,8 @@ class TestInstallationHelp:
         # Just verify that some installation instructions are present
         assert "nodejs.org" in captured.err or "install node" in captured.err.lower()
         assert "DIRECT USAGE" in captured.err  # npx instructions always included
-        assert "npx promptfoo@latest" in captured.err
+        npx = "npx.cmd" if sys.platform == "win32" else "npx"
+        assert f"{npx} promptfoo@latest" in captured.err
 
 
 class TestPathUtilities:
